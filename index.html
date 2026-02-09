@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YuYu-Chat - Login</title><link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+
+    <button class="theme-toggle" onclick="toggleTheme()">
+        <span class="material-icons">dark_mode</span>
+    </button>
+
+    <div id="login-screen">
+        <div class="login-card">
+            <h2>
+                <span style="color: #0026ff;">YuYu</span>-Chat Corporativo
+            </h2>
+
+            <p id="error-msg" style="color: red; display: none; font-size: 0.9rem; border: 1px solid #ffcccc; background: #ffe6e6; padding: 10px; border-radius: 4px; margin-bottom: 15px;"></p>
+
+            <div class="form-group">
+                <label>Usuário de Rede (Login)</label>
+                <input
+                    type="text"
+                    id="usuario-ad"
+                    placeholder="Ex: j.silva"
+                    required
+                    autofocus
+                >
+            </div>
+
+            <div class="form-group">
+                <label>Senha</label>
+                <input
+                    type="password"
+                    id="senha-ad"
+                    placeholder="Sua senha de rede"
+                    required
+                    onkeypress="handleLoginEnter(event)"
+                >
+            </div>
+
+            <button
+                class="btn-login"
+                id="btn-entrar"
+                onclick="fazerLoginAPI()"
+            >
+                Entrar
+            </button>
+            
+            </div>
+    </div>
+
+    <div id="app-screen" style="display: none;">
+        <header>
+            <div class="header-info">
+                <h2 id="welcome-msg">Bem-vindo</h2>
+                <small id="welcome-team"></small>
+            </div>
+            <button
+                onclick="logout()"
+                style="background: transparent; color: var(--text); border: 1px solid var(--text); cursor: pointer;"
+            >
+                Sair
+            </button>
+        </header>
+
+        <div class="container-lista">
+            <h3 id="list-title">Contatos Disponíveis</h3>
+            <div id="user-grid" class="user-grid"></div>
+        </div>
+    </div>
+
+    <div id="popups-container"></div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
