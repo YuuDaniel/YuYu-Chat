@@ -17,24 +17,48 @@ def salvar_log_conversa(remetente_nome, destinatario_id, mensagem):
     mes_nome = MESES[agora.month]       
     dia_arquivo = agora.strftime("%d.%m")   
     
-    # Caminho base: pasta do projeto/logs/2025/Janeiro
     caminho_pasta = os.path.join("logs", ano, mes_nome)
     
-    # 2. Cria as pastas se não existirem
     if not os.path.exists(caminho_pasta):
         os.makedirs(caminho_pasta)
         
-    # 3. Define o caminho final do arquivo
     caminho_arquivo = os.path.join(caminho_pasta, f"{dia_arquivo}.txt")
     
-    # 4. Formata a linha do log
     hora = agora.strftime("%H:%M:%S")
-    # Ex: [14:30:05] João Silva -> comercial-maria: Olá, preciso de ajuda.
     linha_log = f"[{hora}] {remetente_nome} -> {destinatario_id}: {mensagem}\n"
     
-    # 5. Escreve no arquivo (mode='a' significa append/adicionar ao final)
     try:
         with open(caminho_arquivo, "a", encoding="utf-8") as f:
             f.write(linha_log)
     except Exception as e:
         print(f"Erro ao salvar log: {e}")
+        
+        # --- NOVA FUNÇÃO PARA LOGS DO SISTEMA ---
+def salvar_log_sistema(tipo, mensagem):
+    """
+    Salva eventos do sistema em: logs_sistema/2025/Janeiro/17.txt
+    Tipos sugeridos: [LOGIN], [ERRO], [CONEXAO], [SISTEMA]
+    """
+    agora = datetime.now()
+    
+    ano = agora.strftime("%Y")
+    mes_nome = MESES[agora.month]
+    dia_arquivo = agora.strftime("%d.%m")
+    
+    caminho_pasta = os.path.join("logs_sistema", ano, mes_nome)
+    
+    if not os.path.exists(caminho_pasta):
+        os.makedirs(caminho_pasta)
+        
+    caminho_arquivo = os.path.join(caminho_pasta, f"{dia_arquivo}.txt")
+    
+    hora = agora.strftime("%H:%M:%S")
+    linha_log = f"[{hora}] [{tipo.upper()}] {mensagem}\n"
+    
+    try:
+        print(linha_log.strip()) 
+        
+        with open(caminho_arquivo, "a", encoding="utf-8") as f:
+            f.write(linha_log)
+    except Exception as e:
+        print(f"Erro crítico no logger: {e}")

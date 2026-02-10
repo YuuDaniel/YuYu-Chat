@@ -174,9 +174,31 @@ header {
     overflow: hidden;
 }
 
-.user-card.supervisor-card {
-    background-color: var(--bg-supervisor);
-    border: 1px solid var(--primary);
+/* Notificação no Card (Painel) */
+.card-notification {
+    position: absolute;
+    top: 6px;    /* Ajustado para dentro */
+    right: 6px;  /* Ajustado para dentro */
+    background-color: #ff3b30;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: bold;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    opacity: 0;
+    transform: scale(0);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 10;
+}
+
+.card-notification.show {
+    opacity: 1;
+    transform: scale(1);
 }
 
 .user-card:hover {
@@ -195,6 +217,45 @@ header {
     background: #31a24c;
 }
 
+/* --- ESTILOS DE CARGOS --- */
+.user-card.supervisor-card {
+    background-color: #f3e5f5; 
+    border: 1px solid #9800d4; 
+    color: #4a148c;
+}
+
+.user-card.ti-card {
+    background-color: #e3f2fd; 
+    border: 1px solid #2196f3; 
+    color: #0d47a1;
+}
+
+.user-card.monitoria-card {
+    background-color: #e0f7fa; 
+    border: 1px solid #26da77; 
+    color: #006064;            
+}
+
+.user-card.auxiliar-card {
+    background-color: #f3e5f5; 
+    border: 1px solid #9800d4; 
+    color: #4a148c;            
+}
+
+/* --- DARK MODE NOS CARGOS --- */
+body.dark-mode .user-card.ti-card {
+    background-color: #1e2a38; border-color: #2196f3; color: #e1f5fe;
+}
+body.dark-mode .user-card.monitoria-card {
+    background-color: #183033; border-color: #26da77; color: #b2ebf2;
+}
+body.dark-mode .user-card.supervisor-card {
+    background-color: #2a1a2e; border-color: #e1bee7; color: #f3e5f5;            
+}
+body.dark-mode .user-card.auxiliar-card {
+    background-color: #2a1a2e; border-color: #e1bee7; color: #f3e5f5;            
+}
+
 /* --- CHAT POPUPS --- */
 #popups-container { 
     position: fixed; 
@@ -204,8 +265,10 @@ header {
     gap: 15px; 
     align-items: flex-end; 
     pointer-events: none; 
-    z-index: 1000; 
-}
+    z-index: 1000;
+    flex-wrap: nowrap; 
+    padding-right: 10px;
+} 
 
 .chat-popup { 
     width: 320px; 
@@ -217,12 +280,35 @@ header {
     flex-direction: column; 
     pointer-events: all; 
     border: 1px solid var(--border); 
-    transition: height 0.3s ease; 
-    overflow: hidden; 
+    transition: width 0.3s ease, height 0.3s ease; 
+    overflow: hidden;
+    flex-shrink: 0; 
+} 
+
+/* ESTILO MINIMIZADO (ABREVIADO - Estilo Aba) */
+.chat-popup.minimized {
+    height: 40px;      
+    width: 150px;      
+    border-radius: 8px 8px 0 0;
 }
 
-.chat-popup.minimized {
-    height: 48px; 
+.chat-popup.minimized .popup-body,
+.chat-popup.minimized .popup-footer {
+    display: none; 
+}
+
+.chat-popup.minimized .popup-header {
+    padding: 0 10px;
+    justify-content: center; 
+}
+
+.chat-popup.minimized .popup-header span {
+    font-size: 0.85rem;
+}
+
+.chat-popup.minimized .popup-notification {
+    top: -5px;
+    right: -5px;
 }
 
 .popup-header { 
@@ -235,6 +321,36 @@ header {
     cursor: pointer; 
     font-weight: bold; 
     user-select: none;
+    position: relative;
+    overflow: visible;  
+}
+
+/* --- NOTIFICAÇÃO NA ABA DO CHAT --- */
+.popup-notification {
+    position: absolute;
+    top: 11px;    
+    right: 35px;  
+    
+    background-color: #ff3b30; 
+    color: white;
+    font-size: 0.7rem;
+    font-weight: bold;
+    min-width: 18px; 
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    opacity: 0;
+    transform: scale(0);
+    transition: all 0.2s ease;
+    z-index: 20;
+}
+
+.popup-notification.show {
+    opacity: 1;
+    transform: scale(1);
 }
 
 .popup-header span {
@@ -251,8 +367,8 @@ header {
     font-size: 1.5rem; 
     color: rgba(255,255,255, 0.8); 
     cursor: pointer; 
-    padding: 0;
-    margin-left: 10px;
+    padding: 0; 
+    margin-left: 10px; 
     flex-shrink: 0; 
     line-height: 1;
 }
@@ -287,7 +403,7 @@ header {
     text-align: center;
 }
 
-
+/* --- MENSAGENS E CONTEÚDO DO CHAT --- */
 .popup-body { 
     flex: 1; 
     overflow-y: auto; 
@@ -310,7 +426,6 @@ header {
     flex-direction: column;
 }
 
-/* MENSAGEM RECEBIDA (Esquerda - Cinza) */
 .msg.recebida { 
     background: var(--msg-rec-bg); 
     color: var(--msg-rec-text); 
@@ -318,7 +433,6 @@ header {
     border-bottom-left-radius: 4px; 
 }
 
-/* MENSAGEM ENVIADA (Direita - Azul) */
 .msg.enviada { 
     background: var(--msg-env-bg); 
     color: var(--msg-env-text); 
@@ -326,7 +440,6 @@ header {
     border-bottom-right-radius: 4px; 
 }
 
-/* DATA E HORA E CHECK */
 .msg-meta { 
     display: flex; 
     justify-content: flex-end; 
@@ -340,7 +453,7 @@ header {
 
 .msg-check { font-size: 0.8rem; font-weight: bold; }
 .msg-check.lido { color: #fff; } 
-.msg.recebida .msg-check { display: none; } 
+.msg.recebida .msg-check { display: none; }
 
 .msg-name {
     font-size: 0.75rem;
