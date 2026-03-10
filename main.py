@@ -98,7 +98,6 @@ class ConnectionManager:
             except:
                 pass
         
-        # Envia Echo para Remetente
         if sender_id in self.active_connections and sender_id != target_id:
             try:
                 await self.active_connections[sender_id]["ws"].send_json({
@@ -110,6 +109,23 @@ class ConnectionManager:
                 })
             except:
                 pass
+            
+    # --- FUNÇÃO DE TRANSMISSÃO EM MASSA ---
+    async def send_broadcast(self, sender_id: str, targets: list, message: str):
+        hora_atual = datetime.now().strftime("%H:%M")
+        
+        for target_id in targets:
+            if target_id in self.active_connections and target_id != sender_id:
+                try:
+                    await self.active_connections[target_id]["ws"].send_json({
+                        "tipo": "mensagem_privada", 
+                        "remetente_id": sender_id,
+                        "remetente_nome": self.active_connections[sender_id]["dados"]["nome"],
+                        "texto": message,
+                        "hora": hora_atual
+                    })
+                except:
+                    pass
 
     async def send_read_status(self, reader_id: str, target_id: str):
         if target_id in self.active_connections:
@@ -123,7 +139,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# --- LÓGICA WEBSOCKET ---
+# --- LÓGICA WEBSOCKET COMPARTILHADA ---
 async def logica_websocket_compartilhada(websocket: WebSocket, perfil: str, nome: str, equipe: str, cargo_exibicao: str):
     from urllib.parse import unquote
     cargo_limpo = unquote(cargo_exibicao) 
@@ -141,27 +157,46 @@ async def logica_websocket_compartilhada(websocket: WebSocket, perfil: str, nome
     await manager.connect(websocket, user_id, dados_usuario)
     
     try:
+        # Loop UNIFICADO de escuta de mensagens
         while True:
             data = await websocket.receive_json()
             
+            # --- 1. ROTA DE MENSAGEM PRIVADA COMUM ---
             if "target_id" in data and "message" in data:
                 msg_texto = data["message"]
                 msg_id = data.get("msg_id", "") 
                 
-                # --- SISTEMA DE IDEMPOTÊNCIA (EVITA DUPLICIDADE) ---
+                # Sistema Anti-Duplicidade
                 if user_id in manager.active_connections:
                     user_data = manager.active_connections[user_id]
                     ids_processados = user_data["processed_ids"]
-                    
-                    if msg_id and msg_id in ids_processados:
-                        print(f"--- Duplicidade Barrada pelo ID: {msg_id} ---")
+                    if msg_id and msg_id in ids_processados: 
                         continue
-                    
-                    if msg_id:
+                    if msg_id: 
                         ids_processados.append(msg_id)
 
                 await manager.send_private_message(user_id, data["target_id"], msg_texto)
                 salvar_log_conversa(nome, data["target_id"], msg_texto)
+            
+            # --- 2. NOVA ROTA: BROADCAST (TRANSMISSÃO) ---
+            elif "broadcast_targets" in data and "message" in data:
+                targets = data["broadcast_targets"]
+                msg_texto = data["message"]
+                msg_id = data.get("msg_id", "") 
+
+                # Filtro Anti-Duplicidade
+                if user_id in manager.active_connections:
+                    user_data = manager.active_connections[user_id]
+                    ids_processados = user_data["processed_ids"]
+                    if msg_id and msg_id in ids_processados:
+                        continue
+                    if msg_id:
+                        ids_processados.append(msg_id)
+
+                await manager.send_broadcast(user_id, targets, msg_texto)
+                
+                for t_id in targets:
+                    salvar_log_conversa(nome, t_id, msg_texto)
             
             elif "read_confirmation" in data:
                 target = data["read_confirmation"]
@@ -181,6 +216,7 @@ async def logica_websocket_compartilhada(websocket: WebSocket, perfil: str, nome
 
 # --- ROTAS WEBSOCKET ---
 
+# 1. ROTA NOVA
 @app.websocket("/ws/{perfil}/{nome}/{equipe}/{cargo_exibicao}")
 async def websocket_endpoint_novo(websocket: WebSocket, perfil: str, nome: str, equipe: str, cargo_exibicao: str):
     await logica_websocket_compartilhada(websocket, perfil, nome, equipe, cargo_exibicao)

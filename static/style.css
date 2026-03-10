@@ -148,13 +148,6 @@ header {
     font-size: 0.9rem;
 }
 
-#list-title {
-    border-bottom: 3px solid var(--primary);
-    display: inline-block;
-    padding-bottom: 5px;
-    margin-bottom: 20px;
-}
-
 .user-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -177,8 +170,8 @@ header {
 /* Notificação no Card (Painel) */
 .card-notification {
     position: absolute;
-    top: 6px;    /* Ajustado para dentro */
-    right: 6px;  /* Ajustado para dentro */
+    top: 6px;    
+    right: 6px;  
     background-color: #ff3b30;
     color: white;
     font-size: 0.75rem;
@@ -218,43 +211,16 @@ header {
 }
 
 /* --- ESTILOS DE CARGOS --- */
-.user-card.supervisor-card {
-    background-color: #f3e5f5; 
-    border: 1px solid #9800d4; 
-    color: #4a148c;
-}
-
-.user-card.ti-card {
-    background-color: #e3f2fd; 
-    border: 1px solid #2196f3; 
-    color: #0d47a1;
-}
-
-.user-card.monitoria-card {
-    background-color: #e0f7fa; 
-    border: 1px solid #26da77; 
-    color: #006064;            
-}
-
-.user-card.auxiliar-card {
-    background-color: #f3e5f5; 
-    border: 1px solid #9800d4; 
-    color: #4a148c;            
-}
+.user-card.supervisor-card { background-color: #f3e5f5; border: 1px solid #9800d4; color: #4a148c; }
+.user-card.ti-card { background-color: #e3f2fd; border: 1px solid #2196f3; color: #0d47a1; }
+.user-card.monitoria-card { background-color: #e0f7fa; border: 1px solid #26da77; color: #006064; }
+.user-card.auxiliar-card { background-color: #f3e5f5; border: 1px solid #9800d4; color: #4a148c; }
 
 /* --- DARK MODE NOS CARGOS --- */
-body.dark-mode .user-card.ti-card {
-    background-color: #1e2a38; border-color: #2196f3; color: #e1f5fe;
-}
-body.dark-mode .user-card.monitoria-card {
-    background-color: #183033; border-color: #26da77; color: #b2ebf2;
-}
-body.dark-mode .user-card.supervisor-card {
-    background-color: #2a1a2e; border-color: #e1bee7; color: #f3e5f5;            
-}
-body.dark-mode .user-card.auxiliar-card {
-    background-color: #2a1a2e; border-color: #e1bee7; color: #f3e5f5;            
-}
+body.dark-mode .user-card.ti-card { background-color: #1e2a38; border-color: #2196f3; color: #e1f5fe; }
+body.dark-mode .user-card.monitoria-card { background-color: #183033; border-color: #26da77; color: #b2ebf2; }
+body.dark-mode .user-card.supervisor-card { background-color: #2a1a2e; border-color: #e1bee7; color: #f3e5f5; }
+body.dark-mode .user-card.auxiliar-card { background-color: #2a1a2e; border-color: #e1bee7; color: #f3e5f5; }
 
 /* --- CHAT POPUPS --- */
 #popups-container { 
@@ -285,7 +251,7 @@ body.dark-mode .user-card.auxiliar-card {
     flex-shrink: 0; 
 } 
 
-/* ESTILO MINIMIZADO (ABREVIADO - Estilo Aba) */
+/* ESTILO MINIMIZADO */
 .chat-popup.minimized {
     height: 40px;      
     width: 150px;      
@@ -293,18 +259,9 @@ body.dark-mode .user-card.auxiliar-card {
 }
 
 .chat-popup.minimized .popup-body,
-.chat-popup.minimized .popup-footer {
-    display: none; 
-}
-
-.chat-popup.minimized .popup-header {
-    padding: 0 10px;
-    justify-content: center; 
-}
-
-.chat-popup.minimized .popup-header span {
-    font-size: 0.85rem;
-}
+.chat-popup.minimized .popup-footer { display: none; }
+.chat-popup.minimized .popup-header { padding: 0 10px; justify-content: center; }
+.chat-popup.minimized .popup-header span { font-size: 0.85rem; }
 
 .chat-popup.minimized .popup-notification {
     top: -5px;
@@ -330,7 +287,6 @@ body.dark-mode .user-card.auxiliar-card {
     position: absolute;
     top: 11px;    
     right: 35px;  
-    
     background-color: #ff3b30; 
     color: white;
     font-size: 0.7rem;
@@ -348,10 +304,7 @@ body.dark-mode .user-card.auxiliar-card {
     z-index: 20;
 }
 
-.popup-notification.show {
-    opacity: 1;
-    transform: scale(1);
-}
+.popup-notification.show { opacity: 1; transform: scale(1); }
 
 .popup-header span {
     white-space: nowrap;      
@@ -362,105 +315,134 @@ body.dark-mode .user-card.auxiliar-card {
 }
 
 .close-btn { 
-    background: none; 
-    border: none; 
-    font-size: 1.5rem; 
-    color: rgba(255,255,255, 0.8); 
-    cursor: pointer; 
-    padding: 0; 
-    margin-left: 10px; 
-    flex-shrink: 0; 
-    line-height: 1;
+    background: none; border: none; font-size: 1.5rem; 
+    color: rgba(255,255,255, 0.8); cursor: pointer; padding: 0; 
+    margin-left: 10px; flex-shrink: 0; line-height: 1;
 }
 .close-btn:hover { color: #fff; }
 
 .popup-footer { 
-    padding: 12px; 
-    background: var(--bg-card); 
-    border-top: 1px solid var(--border); 
+    padding: 12px; background: var(--bg-card); border-top: 1px solid var(--border); 
 }
 
 .popup-footer input { 
-    width: 100%; 
-    padding: 10px 15px;
-    border-radius: 20px; 
-    border: 1px solid var(--border); 
-    outline: none;
-    font-size: 0.9rem;
+    width: 100%; padding: 10px 15px; border-radius: 20px; 
+    border: 1px solid var(--border); outline: none; font-size: 0.9rem;
 }
-.popup-footer input:focus {
-    border-color: var(--primary);
-}
-
-/* --- MENSAGENS DE ERRO --- */
-#error-msg {
-    background-color: #ffebee;
-    color: #c62828;
-    padding: 10px;
-    border-radius: 4px;
-    margin-bottom: 15px;
-    border: 1px solid #ef9a9a;
-    text-align: center;
-}
+.popup-footer input:focus { border-color: var(--primary); }
 
 /* --- MENSAGENS E CONTEÚDO DO CHAT --- */
 .popup-body { 
-    flex: 1; 
-    overflow-y: auto; 
-    padding: 15px; 
-    display: flex; 
-    flex-direction: column; 
-    gap: 8px; 
-    background: var(--bg-body); 
+    flex: 1; overflow-y: auto; padding: 15px; 
+    display: flex; flex-direction: column; gap: 8px; background: var(--bg-body); 
 }
 
 .msg { 
-    max-width: 75%; 
-    padding: 10px 15px; 
-    border-radius: 20px; 
-    font-size: 0.95rem; 
-    line-height: 1.4; 
-    position: relative; 
-    word-wrap: break-word; 
-    display: flex;
-    flex-direction: column;
+    max-width: 75%; padding: 10px 15px; border-radius: 20px; 
+    font-size: 0.95rem; line-height: 1.4; position: relative; 
+    word-wrap: break-word; display: flex; flex-direction: column;
 }
 
-.msg.recebida { 
-    background: var(--msg-rec-bg); 
-    color: var(--msg-rec-text); 
-    align-self: flex-start; 
-    border-bottom-left-radius: 4px; 
-}
-
-.msg.enviada { 
-    background: var(--msg-env-bg); 
-    color: var(--msg-env-text); 
-    align-self: flex-end; 
-    border-bottom-right-radius: 4px; 
-}
+.msg.recebida { background: var(--msg-rec-bg); color: var(--msg-rec-text); align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg.enviada { background: var(--msg-env-bg); color: var(--msg-env-text); align-self: flex-end; border-bottom-right-radius: 4px; }
 
 .msg-meta { 
-    display: flex; 
-    justify-content: flex-end; 
-    align-items: center; 
-    gap: 4px; 
-    margin-top: 4px; 
-    font-size: 0.65rem; 
-    opacity: 0.7;
-    margin-right: 5px; 
+    display: flex; justify-content: flex-end; align-items: center; 
+    gap: 4px; margin-top: 4px; font-size: 0.65rem; opacity: 0.7; margin-right: 5px; 
 }
 
 .msg-check { font-size: 0.8rem; font-weight: bold; }
 .msg-check.lido { color: #fff; } 
 .msg.recebida .msg-check { display: none; }
 
-.msg-name {
-    font-size: 0.75rem;
-    font-weight: bold;
-    margin-bottom: 4px;
-    opacity: 0.9;
-    margin-left: 5px;
-}
+.msg-name { font-size: 0.75rem; font-weight: bold; margin-bottom: 4px; opacity: 0.9; margin-left: 5px; }
 .msg.enviada .msg-name { display: none; } 
 .msg.recebida .msg-name { color: var(--primary); }
+
+#error-msg {
+    background-color: #ffebee; color: #c62828; padding: 10px; border-radius: 4px;
+    margin-bottom: 15px; border: 1px solid #ef9a9a; text-align: center;
+}
+
+/* =========================================
+   MODAL DE TRANSMISSÃO E CABEÇALHO DA LISTA
+========================================= */
+
+.lista-header { 
+    display: flex; justify-content: space-between; 
+    align-items: flex-end; margin-bottom: 20px; 
+}
+
+#list-title { margin: 0; border-bottom: 3px solid var(--primary); padding-bottom: 5px;}
+
+.btn-broadcast-style {
+    background: var(--primary); color: white; border: none; 
+    padding: 10px 15px; border-radius: 8px; cursor: pointer; 
+    font-weight: bold; box-shadow: var(--shadow); transition: transform 0.2s, background 0.2s;
+}
+.btn-broadcast-style:hover { background: var(--primary-hover); transform: translateY(-2px); }
+
+/* --- POPUP (MODAL) --- */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.6); 
+    display: none; justify-content: center; align-items: center;
+    z-index: 3000; 
+}
+
+.modal-content {
+    background: var(--bg-card); padding: 25px; border-radius: 12px;
+    width: 90%; max-width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    border: 1px solid var(--border); text-align: left; 
+}
+
+#pesquisa-broadcast {
+    width: 100%; padding: 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bg-body);
+    color: var(--text); margin-bottom: 15px; box-sizing: border-box;
+}
+
+.lista-destinatarios {
+    max-height: 220px; overflow-y: auto; border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; margin-bottom: 15px; background: var(--bg-body);
+}
+
+input[type="checkbox"] {
+    width: auto !important; height: auto !important;     
+    margin: 0 !important; padding: 0; cursor: pointer; transform: scale(1.2);
+}
+
+.lista-destinatarios label {
+    display: flex; align-items: center; justify-content: flex-start;
+    gap: 10px; margin-bottom: 4px; font-size: 0.9rem; cursor: pointer;
+    padding: 6px 10px; border-radius: 4px; transition: background 0.2s;
+    word-break: break-word; 
+}
+
+.lista-destinatarios label:hover { background: rgba(0, 0, 0, 0.05); }
+body.dark-mode .lista-destinatarios label:hover { background: rgba(255, 255, 255, 0.05); }
+
+.check-todos-container {
+    display: flex; align-items: center; justify-content: flex-start; 
+    gap: 10px; margin-bottom: 10px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border); font-weight: bold; cursor: pointer;
+}
+
+#texto-broadcast {
+    width: 100%; padding: 12px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bg-body);
+    color: var(--text); font-family: inherit; resize: vertical;
+    box-sizing: border-box; margin-bottom: 15px;
+}
+
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+.btn-cancelar {
+    background: transparent; color: var(--text-muted);
+    border: 1px solid var(--border); padding: 8px 15px;
+    border-radius: 6px; cursor: pointer; font-weight: bold;
+}
+.btn-enviar {
+    background: #31a24c; color: white; border: none;
+    padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;
+}

@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YuYu-Chat - Login</title><link rel="icon" type="image/png" href="/static/favicon.png">
+    <title>YuYu-Chat - Login</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
@@ -50,8 +51,7 @@
             >
                 Entrar
             </button>
-            
-            </div>
+        </div>
     </div>
 
     <div id="app-screen" style="display: none;">
@@ -62,20 +62,49 @@
             </div>
             <button
                 onclick="logout()"
-                style="background: transparent; color: var(--text); border: 1px solid var(--text); cursor: pointer;"
+                style="background: transparent; color: var(--text); border: 1px solid var(--text); cursor: pointer; padding: 5px 15px; border-radius: 6px;"
             >
                 Sair
             </button>
-        </header>
+        </header> 
 
-        <div class="container-lista">
-            <h3 id="list-title">Contatos Disponíveis</h3>
-            <div id="user-grid" class="user-grid"></div>
+        <div class="lista-header">
+            <h3 id="list-title">Carregando contatos...</h3>
+            
+            <button id="btn-broadcast" class="btn-broadcast-style" onclick="abrirModalBroadcast()" style="display: none;">
+                📢 Enviar Aviso em Massa
+            </button>
         </div>
+
+        <div id="user-grid" class="user-grid"></div>
     </div>
 
     <div id="popups-container"></div>
 
-    <script src="/static/script.js?v=2.0"></script>
+    <script src="/static/script.js?v=2.1"></script>
+    
+    <div id="modal-broadcast" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 style="margin-top: 0; color: var(--primary);">📢 Nova Transmissão</h3>
+            <p style="font-size: 0.9rem; color: var(--text-muted);">Selecione os operadores que receberão o aviso:</p>
+            
+            <input type="text" id="pesquisa-broadcast" placeholder="🔍 Pesquisar operador..." onkeyup="filtrarBroadcast()">
+
+            <label class="check-todos-container">
+                <input type="checkbox" id="check-todos" onchange="toggleTodosBroadcast()"> Marcar Todos
+            </label>
+            
+            <div id="lista-destinatarios" class="lista-destinatarios">
+                </div>
+            
+            <textarea id="texto-broadcast" placeholder="Digite seu aviso aqui... Ele aparecerá com a tag [AVISO] para os operadores." rows="4"></textarea>
+            
+            <div class="modal-actions">
+                <button class="btn-cancelar" onclick="fecharModalBroadcast()">Cancelar</button>
+                <button class="btn-enviar" onclick="enviarBroadcast()">Enviar Aviso</button>
+            </div>
+        </div>
+    </div>
+    
 </body>
 </html>

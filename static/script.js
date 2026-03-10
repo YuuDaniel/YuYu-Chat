@@ -5,6 +5,7 @@ let minhaEquipe = "";
 let meuNomeReal = "";
 let chatsAbertos = {};
 let mensagensNaoLidas = 0;
+let listaUsuariosOnlineCache = [];
 const tituloOriginal = document.title; 
 const notificacaoAudio = new Audio('/static/sounds/notification-sound-effect-372475.mp3');
 
@@ -120,6 +121,10 @@ function iniciarWebSocket(dados) {
         
         const titulo = document.getElementById('list-title');
         titulo.innerText = meuPerfil === 'supervisor' ? "Painel de Controle (Todos Online)" : "Supervisores Disponíveis";
+        
+        if (meuPerfil === 'supervisor') {
+            document.getElementById('btn-broadcast').style.display = 'inline-block';
+        }
     };
 
     ws.onclose = (event) => {
@@ -136,6 +141,7 @@ function iniciarWebSocket(dados) {
     ws.onmessage = (event) => {
         const payload = JSON.parse(event.data);
         if (payload.tipo === "lista_usuarios") {
+            listaUsuariosOnlineCache = payload.usuarios;
             atualizarListaUsuarios(payload.usuarios);
         } 
         else if (payload.tipo === "mensagem_privada") {
@@ -238,7 +244,6 @@ function atualizarListaUsuarios(usuarios) {
 }
 
 // --- FUNÇÕES DE CONTROLE DE NOTIFICAÇÃO ---
-
 function atualizarNotificacaoCard(userId, qtd) {
     const badge = document.getElementById(`notif-${userId}`);
     if (badge) {
@@ -304,7 +309,7 @@ function abrirPopup(targetId, targetName) {
             <span>${targetName}</span>
             <button class="close-btn">×</button>
         </div>
-        <div class="popup-body" id="msgs-${targetId}"></div>
+        <div class="popup-body" id="msgs-${targetId}" onclick="limparNotificacoes('${targetId}')"></div>
         <div class="popup-footer">
             <input type="text" placeholder="Digite..." 
                 onkeypress="handleEnter('${targetId}', event)"
@@ -387,7 +392,6 @@ function marcarMensagensComoLidas(leitorId) {
     }
 }
 
-// --- FUNÇÃO DE RECEBER MENSAGEM (CORRIGIDA: ABRE AUTOMÁTICO) ---
 function receberMensagem(dados) {
     let idConversa = (dados.remetente_id === "eu") ? dados.destinatario_id : dados.remetente_id;
     let classeCss = (dados.remetente_id === "eu") ? "enviada" : "recebida";
@@ -424,7 +428,6 @@ function receberMensagem(dados) {
             const isMinimizado = popup.classList.contains('minimized');
 
             if (isMinimizado || !isFocado) {
-                // Notifica Card
                 const cardBadge = document.getElementById(`notif-${idConversa}`);
                 let cardCount = cardBadge && cardBadge.innerText ? parseInt(cardBadge.innerText) : 0;
                 atualizarNotificacaoCard(idConversa, cardCount + 1);
@@ -441,78 +444,6 @@ function receberMensagem(dados) {
     if (!jaRenderizouViaHistorico) {
         renderizarMensagem(idConversa, dados.texto, classeCss, dados.hora, nomeExibir);
     }
-}
-
-// --- FUNÇÃO ABRIR POPUP ---
-function abrirPopup(targetId, targetName) {
-    const container = document.getElementById('popups-container');
-
-    limparNotificacoes(targetId);
-
-    if (chatsAbertos[targetId]) {
-        const popup = chatsAbertos[targetId];
-        container.appendChild(popup); 
-        popup.classList.remove('minimized');
-        
-        atualizarNotificacaoPopup(targetId, 0);
-
-        const input = popup.querySelector('input');
-        if(input) {
-            setTimeout(() => input.focus(), 50);
-            enviarConfirmacaoLeitura(targetId);
-        }
-        return;
-    }
-
-    const popup = document.createElement('div');
-    popup.className = 'chat-popup';
-    popup.id = `popup-${targetId}`;
-
-    popup.innerHTML = `
-        <div class="popup-header" title="${targetName}">
-            <div class="popup-notification" id="popup-notif-${targetId}">0</div>
-            <span>${targetName}</span>
-            <button class="close-btn">×</button>
-        </div>
-        <div class="popup-body" id="msgs-${targetId}" onclick="limparNotificacoes('${targetId}')"></div>
-        <div class="popup-footer">
-            <input type="text" placeholder="Digite..." 
-                onkeypress="handleEnter('${targetId}', event)"
-                onfocus="limparNotificacoes('${targetId}')" 
-                onclick="limparNotificacoes('${targetId}')"
-                autocomplete="off"
-            >
-        </div>
-    `;
-
-    const header = popup.querySelector('.popup-header');
-    const closeBtn = popup.querySelector('.close-btn');
-
-    closeBtn.onclick = (e) => {
-        e.stopPropagation();
-        fecharPopup(targetId);
-    };
-
-    header.onclick = () => {
-        popup.classList.toggle('minimized');
-        if (!popup.classList.contains('minimized')) {
-            limparNotificacoes(targetId);
-            const input = popup.querySelector('input');
-            if (input) input.focus();
-        }
-    };
-
-    container.appendChild(popup);
-    chatsAbertos[targetId] = popup;
-
-    carregarHistoricoLocal(targetId);
-    enviarConfirmacaoLeitura(targetId);
-}
-
-function limparNotificacoes(targetId) {
-    atualizarNotificacaoCard(targetId, 0);
-    atualizarNotificacaoPopup(targetId, 0);
-    enviarConfirmacaoLeitura(targetId);
 }
 
 function renderizarMensagem(idConversa, texto, classe, hora) {
@@ -562,4 +493,96 @@ function limparHistoricoAntigo() {
 
 function gerarUUID() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
+}
+// ==========================================
+// MÓDULO DE TRANSMISSÃO (BROADCAST)
+// ==========================================
+
+function abrirModalBroadcast() {
+    const listaDiv = document.getElementById('lista-destinatarios');
+    listaDiv.innerHTML = "";
+    document.getElementById('check-todos').checked = false;
+    document.getElementById('texto-broadcast').value = "";
+    
+    const inputPesquisa = document.getElementById('pesquisa-broadcast');
+    if (inputPesquisa) inputPesquisa.value = "";
+
+    const alvos = listaUsuariosOnlineCache.filter(u => u.id !== meuId);
+
+    if (alvos.length === 0) {
+        listaDiv.innerHTML = "<p style='color: var(--text-muted);'>Nenhum usuário online disponível.</p>";
+    } else {
+        alvos.forEach(user => {
+            let cargo = user.cargo_exibicao || "Operador";
+            listaDiv.innerHTML += `
+                <label class="item-destinatario">
+                    <input type="checkbox" class="check-destinatario" value="${user.id}"> 
+                    <span class="nome-alvo"><b>${user.nome}</b> <span style="font-size: 0.75rem; color: var(--text-muted);">(${cargo})</span></span>
+                </label>
+            `;
+        });
+    }
+
+    document.getElementById('modal-broadcast').style.display = 'flex';
+}
+
+function fecharModalBroadcast() {
+    document.getElementById('modal-broadcast').style.display = 'none';
+}
+
+function filtrarBroadcast() {
+    const termo = document.getElementById('pesquisa-broadcast').value.toLowerCase();
+    const itens = document.querySelectorAll('.item-destinatario');
+    
+    itens.forEach(item => {
+        const nome = item.querySelector('.nome-alvo').innerText.toLowerCase();
+        if (nome.includes(termo)) {
+            item.style.display = 'flex';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+function toggleTodosBroadcast() {
+    const marcar = document.getElementById('check-todos').checked;
+    const itensVisiveis = document.querySelectorAll('.item-destinatario');
+    
+    itensVisiveis.forEach(item => {
+        if (item.style.display !== 'none') {
+            const cb = item.querySelector('.check-destinatario');
+            if (cb) cb.checked = marcar;
+        }
+    });
+}
+
+function enviarBroadcast() {
+    const checkboxes = document.querySelectorAll('.check-destinatario:checked');
+    const texto = document.getElementById('texto-broadcast').value.trim();
+
+    if (checkboxes.length === 0) {
+        alert("Selecione pelo menos um destinatário.");
+        return;
+    }
+    if (!texto) {
+        alert("Digite uma mensagem para enviar.");
+        return;
+    }
+
+    const alvosIds = Array.from(checkboxes).map(cb => cb.value);
+    
+    const textoFinal = `📢 [AVISO]: ${texto}`;
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            broadcast_targets: alvosIds,
+            message: textoFinal,
+            msg_id: gerarUUID() 
+        }));
+        
+        alert(`Aviso enviado com sucesso para ${alvosIds.length} operador(es)!`);
+        fecharModalBroadcast();
+    } else {
+        alert("Erro: Conexão com o servidor perdida.");
+    }
 }
