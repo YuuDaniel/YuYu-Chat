@@ -69,7 +69,15 @@
         </header> 
 
         <div class="lista-header">
-            <h3 id="list-title">Carregando contatos...</h3>
+            <div class="title-and-filter">
+                <h3 id="list-title">Carregando contatos...</h3>
+                
+                <div id="multi-select-container" class="multi-select-container" style="display: none;">
+                    <button id="btn-filtro-equipe" onclick="toggleMenuFiltro()">Carteiras: Todas ▼</button>
+                    <div id="menu-filtro-equipes" class="menu-filtro-oculto">
+                        </div>
+                </div>
+            </div>
             
             <button id="btn-broadcast" class="btn-broadcast-style" onclick="abrirModalBroadcast()" style="display: none;">
                 📢 Enviar Aviso em Massa

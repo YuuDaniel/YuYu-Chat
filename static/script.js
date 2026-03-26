@@ -5,7 +5,8 @@ let minhaEquipe = "";
 let meuNomeReal = "";
 let chatsAbertos = {};
 let mensagensNaoLidas = 0;
-let listaUsuariosOnlineCache = [];
+let equipesSelecionadas = []; 
+let filtroEquipeAtual = "TODAS";
 const tituloOriginal = document.title; 
 const notificacaoAudio = new Audio('/static/sounds/notification-sound-effect-372475.mp3');
 
@@ -153,7 +154,6 @@ function iniciarWebSocket(dados) {
     };
 }
 
-// --- LISTA DE USUÁRIOS E ORDENAÇÃO ---
 function atualizarListaUsuarios(usuarios) {
     const grid = document.getElementById('user-grid');
     
@@ -165,10 +165,45 @@ function atualizarListaUsuarios(usuarios) {
 
     grid.innerHTML = "";
     
+    // --- 1. COLETA AS CARTEIRAS APENAS DE OPERADORES ---
+    const equipesUnicas = new Set();
+    usuarios.forEach(u => {
+        const cargoL = (u.cargo_exibicao || "Operador").toLowerCase();
+        const isOp = !cargoL.includes('t.i') && !cargoL.includes('monitor') && !cargoL.includes('auxiliar') && u.perfil !== 'supervisor';
+        if (isOp && u.equipe) {
+            equipesUnicas.add(u.equipe);
+        }
+    });
+
+    // --- 2. RENDERIZA O MENU DE FILTRO ---
+    const menuFiltro = document.getElementById('menu-filtro-equipes');
+    menuFiltro.innerHTML = '';
+    
+    let btnFiltroText = "Carteiras: Todas ▼";
+    if (equipesSelecionadas.length > 0) {
+        btnFiltroText = `Carteiras: ${equipesSelecionadas.length} selecionada(s) ▼`;
+    }
+    document.getElementById('btn-filtro-equipe').innerText = btnFiltroText;
+
+    if (equipesUnicas.size > 0) {
+        document.getElementById('multi-select-container').style.display = 'inline-block';
+        Array.from(equipesUnicas).sort().forEach(eq => {
+            const isChecked = equipesSelecionadas.includes(eq) ? "checked" : "";
+            menuFiltro.innerHTML += `
+                <label class="filtro-item">
+                    <input type="checkbox" value="${eq}" onchange="aplicarFiltroEquipes()" ${isChecked}>
+                    ${eq}
+                </label>
+            `;
+        });
+    } else {
+        document.getElementById('multi-select-container').style.display = 'none';
+    }
+
+    // --- 3. ORDENAÇÃO E RENDERIZAÇÃO DOS CARDS ---
     const getPesoCargo = (u) => {
         const cargo = (u.cargo_exibicao || "").toLowerCase();
         const perfil = (u.perfil || "").toLowerCase();
-
         if (cargo.includes('t.i') || cargo.includes('tecnologia')) return 1;
         if (cargo.includes('monitor') || cargo.includes('qualidade')) return 2;
         if (perfil === 'supervisor' && !cargo.includes('auxiliar')) return 3; 
@@ -186,14 +221,29 @@ function atualizarListaUsuarios(usuarios) {
     usuarios.forEach(user => {
         if (user.id === meuId) return; 
 
-        let mostrar = false;
+        let cargoShow = user.cargo_exibicao || "Operador"; 
+        if (cargoShow === "Colaborador") cargoShow = "Operador";
+        const cargoLower = cargoShow.toLowerCase();
         
+        const isTI = cargoLower.includes('t.i') || cargoLower.includes('tecnologia');
+        const isMonitoria = cargoLower.includes('monitor') || cargoLower.includes('qualidade');
+        const isAuxiliar = cargoLower.includes('auxiliar'); 
+        const isSupervisor = user.perfil === 'supervisor' && !isTI && !isMonitoria && !isAuxiliar;
+        
+        const isOperador = !isTI && !isMonitoria && !isAuxiliar && user.perfil !== 'supervisor';
+
+        // === FILTRO SÓ AFETA OPERADORES ===
+        if (isOperador && equipesSelecionadas.length > 0) {
+            if (!equipesSelecionadas.includes(user.equipe)) {
+                return; 
+            }
+        }
+
+        let mostrar = false;
         if (meuPerfil === 'supervisor') {
             mostrar = true;
         } else {
-            if (user.perfil === 'supervisor') {
-                mostrar = true;
-            }
+            if (user.perfil === 'supervisor') mostrar = true;
         }
 
         if (mostrar) {
@@ -201,14 +251,6 @@ function atualizarListaUsuarios(usuarios) {
             card.className = 'user-card online';
             card.id = `card-${user.id}`; 
             
-            let cargoShow = user.cargo_exibicao || "Operador"; 
-            if (cargoShow === "Colaborador") cargoShow = "Operador";
-            const cargoLower = cargoShow.toLowerCase();
-            
-            const isTI = cargoLower.includes('t.i') || cargoLower.includes('tecnologia');
-            const isMonitoria = cargoLower.includes('monitor') || cargoLower.includes('qualidade');
-            const isAuxiliar = cargoLower.includes('auxiliar'); 
-            const isSupervisor = user.perfil === 'supervisor' && !isTI && !isMonitoria && !isAuxiliar;
             const isMinhaEquipe = (user.equipe === minhaEquipe);
             
             let icone = "🎧"; 
@@ -243,7 +285,6 @@ function atualizarListaUsuarios(usuarios) {
     });
 }
 
-// --- FUNÇÕES DE CONTROLE DE NOTIFICAÇÃO ---
 function atualizarNotificacaoCard(userId, qtd) {
     const badge = document.getElementById(`notif-${userId}`);
     if (badge) {
@@ -276,7 +317,6 @@ function limparNotificacoes(targetId) {
     enviarConfirmacaoLeitura(targetId);
 }
 
-// --- GERENCIAMENTO DE JANELAS DE CHAT ---
 function abrirPopup(targetId, targetName) {
     const container = document.getElementById('popups-container');
 
@@ -305,9 +345,11 @@ function abrirPopup(targetId, targetName) {
 
     popup.innerHTML = `
         <div class="popup-header" title="${targetName}">
-            <div class="popup-notification" id="popup-notif-${targetId}">0</div>
-            <span>${targetName}</span>
-            <button class="close-btn">×</button>
+            <span class="chat-title">${targetName}</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="popup-notification" id="popup-notif-${targetId}">0</div>
+                <button class="close-btn">×</button>
+            </div>
         </div>
         <div class="popup-body" id="msgs-${targetId}" onclick="limparNotificacoes('${targetId}')"></div>
         <div class="popup-footer">
@@ -494,9 +536,9 @@ function limparHistoricoAntigo() {
 function gerarUUID() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
-// ==========================================
-// MÓDULO DE TRANSMISSÃO (BROADCAST)
-// ==========================================
+
+// Função de Lista de Transmissão (BROADCAST)
+
 
 function abrirModalBroadcast() {
     const listaDiv = document.getElementById('lista-destinatarios');
@@ -537,9 +579,9 @@ function filtrarBroadcast() {
     itens.forEach(item => {
         const nome = item.querySelector('.nome-alvo').innerText.toLowerCase();
         if (nome.includes(termo)) {
-            item.style.display = 'flex';
+            item.style.setProperty('display', 'flex', 'important');
         } else {
-            item.style.display = 'none';
+            item.style.setProperty('display', 'none', 'important');
         }
     });
 }
@@ -570,7 +612,6 @@ function enviarBroadcast() {
     }
 
     const alvosIds = Array.from(checkboxes).map(cb => cb.value);
-    
     const textoFinal = `📢 [AVISO]: ${texto}`;
 
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -580,9 +621,43 @@ function enviarBroadcast() {
             msg_id: gerarUUID() 
         }));
         
+        const agora = new Date();
+        const horaStr = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        
+        alvosIds.forEach(alvoId => {
+            salvarMensagemLocal(alvoId, {
+                texto: textoFinal,
+                classe: 'enviada',
+                hora: horaStr,
+                nome: "Eu", 
+                timestamp: agora.getTime()
+            });
+
+            if (chatsAbertos[alvoId]) {
+                renderizarMensagem(alvoId, textoFinal, 'enviada', horaStr);
+            }
+        });
+
         alert(`Aviso enviado com sucesso para ${alvosIds.length} operador(es)!`);
         fecharModalBroadcast();
     } else {
         alert("Erro: Conexão com o servidor perdida.");
     }
 }
+function toggleMenuFiltro() {
+    document.getElementById('menu-filtro-equipes').classList.toggle('show');
+}
+
+function aplicarFiltroEquipes() {
+    const checkboxes = document.querySelectorAll('#menu-filtro-equipes input[type="checkbox"]:checked');
+    equipesSelecionadas = Array.from(checkboxes).map(cb => cb.value);
+    atualizarListaUsuarios(listaUsuariosOnlineCache); 
+}
+
+document.addEventListener('click', function(event) {
+    const container = document.getElementById('multi-select-container');
+    const menu = document.getElementById('menu-filtro-equipes');
+    if (container && !container.contains(event.target)) {
+        if(menu) menu.classList.remove('show');
+    }
+});

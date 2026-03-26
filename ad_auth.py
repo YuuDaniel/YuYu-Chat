@@ -23,63 +23,82 @@ def autenticar_ad(usuario, senha):
         
         base_dn = 'dc=' + AD_DOMAIN.replace('.', ',dc=')
         filtro = f'(sAMAccountName={user_short})'
-        conn.search(base_dn, filtro, attributes=['displayName', 'department'])
+        
+        conn.search(base_dn, filtro, attributes=['*', 'memberOf'])
         
         nome_real = user_short
         equipe_ad = "Geral"
         caminho_completo = ""
+        lista_grupos = [] 
         
         if conn.entries:
             entry = conn.entries[0]
-            if entry.displayName: nome_real = str(entry.displayName)
-            if entry.department: equipe_ad = str(entry.department)
+            
+            if hasattr(entry, 'displayName') and entry.displayName: 
+                nome_real = str(entry.displayName)
+            if hasattr(entry, 'department') and entry.department: 
+                equipe_ad = str(entry.department)
+            
             caminho_completo = str(entry.entry_dn).lower() 
             
-            # --- DEBUG: MOSTRA O CAMINHO REAL NO TERMINAL ---
+            atributos = entry.entry_attributes_as_dict
+            if 'memberOf' in atributos and atributos['memberOf']:
+                grupos = atributos['memberOf']
+                if isinstance(grupos, str):
+                    grupos = [grupos] 
+                    
+                for grupo_dn in grupos:
+                    partes = str(grupo_dn).split(',')
+                    if partes:
+                        primeira_parte = partes[0]
+                        if primeira_parte.upper().startswith('CN='):
+                            nome_grupo = primeira_parte[3:].strip()
+                            lista_grupos.append(nome_grupo)
+            
             print(f"--> CAMINHO AD: {caminho_completo}")
-            print(f"--> DEPARTAMENTO: {equipe_ad}")
+            print(f"--> GRUPOS LIDOS: {lista_grupos}")
         
         # --- LÓGICA DE PERFIS ---
         dept_lower = equipe_ad.lower()
-        
         equipe_final = equipe_ad
         cargo_exibicao = "Operador"
         perfil_sistema = "operador"
 
-        # REGRA 1: T.I. 
+        for grupo in lista_grupos:
+            if grupo.upper().startswith("EQUIPE "):
+                nome_carteira = grupo[7:].strip() 
+                equipe_final = nome_carteira
+                break 
+
         if "ou=t.i" in caminho_completo or "tecnologia" in dept_lower or "ti" in dept_lower:
             equipe_final = "Tecnologia"
             cargo_exibicao = "T.I."
             perfil_sistema = "supervisor" 
             
-        # REGRA 2: MONITORIA
         elif "ou=monitoria" in caminho_completo or "qualidade" in dept_lower or "monitoria" in dept_lower:
             equipe_final = "Qualidade"
             cargo_exibicao = "Monitoria"
             perfil_sistema = "supervisor"
 
-        # REGRA 3: SUPERVISORES
         elif "ou=supervisores" in caminho_completo or "supervisor" in dept_lower:
             if equipe_final == "Geral": equipe_final = "Supervisão"
             cargo_exibicao = "Supervisor"
             perfil_sistema = "supervisor"
 
-        # --- REGRA 4: AUXILIARES ---
         elif "auxiliares" in caminho_completo or "auxiliar" in dept_lower or "assistente" in dept_lower:
             if equipe_final == "Geral": equipe_final = "Supervisão"
             cargo_exibicao = "Auxiliar"
             perfil_sistema = "supervisor"
 
-        # REGRA 5: OPERADORES
         else:
             cargo_exibicao = "Operador"
             perfil_sistema = "operador"
             if equipe_final == "Geral":
                 equipe_final = "Operação"
 
-        print(f"--> DECISÃO: {cargo_exibicao} (Visão: {perfil_sistema})\n")
+        print(f"--> DECISÃO FINAL: {cargo_exibicao} | Equipe: {equipe_final}\n")
         
-        registrar_log("LOGIN_SUCESSO", f"User: {nome_real} | Cargo: {cargo_exibicao} | Path: {caminho_completo}")
+        registrar_log("LOGIN_SUCESSO", f"User: {nome_real} | Cargo: {cargo_exibicao} | Equipe: {equipe_final} | Path: {caminho_completo}")
 
         return {
             "sucesso": True,
@@ -91,4 +110,5 @@ def autenticar_ad(usuario, senha):
 
     except Exception as e:
         registrar_log("LOGIN_ERRO", f"Falha ao logar {usuario}. Erro: {e}")
+        print(f"ERRO AD: {e}")
         return {"sucesso": False}
