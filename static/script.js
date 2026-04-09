@@ -5,9 +5,10 @@ let minhaEquipe = "";
 let meuNomeReal = "";
 let chatsAbertos = {};
 let mensagensNaoLidas = 0;
-let equipesSelecionadas = []; 
+let equipesSelecionadas = [];
 let filtroEquipeAtual = "TODAS";
-const tituloOriginal = document.title; 
+let listaUsuariosOnlineCache = [];
+const tituloOriginal = document.title;
 const notificacaoAudio = new Audio('/static/sounds/notification-sound-effect-372475.mp3');
 
 window.onload = function() {
@@ -21,9 +22,11 @@ window.onfocus = function() {
 };
 
 function logout() {
-    console.log("Realizando logout...");
     localStorage.removeItem("yuyu_session");
-    if (ws) ws.close();
+    if (ws) {
+        if (ws._heartbeatTimer) clearInterval(ws._heartbeatTimer);
+        ws.close();
+    }
     window.location.href = window.location.origin;
 }
 
@@ -37,17 +40,14 @@ function toggleTheme() {
 
 async function fazerLoginAPI() {
     const usuarioInput = document.getElementById('usuario-ad');
-    const senhaInput = document.getElementById('senha-ad');
-    const btn = document.getElementById('btn-entrar');
-    const errorMsg = document.getElementById('error-msg');
+    const senhaInput   = document.getElementById('senha-ad');
+    const btn          = document.getElementById('btn-entrar');
+    const errorMsg     = document.getElementById('error-msg');
 
     const usuario = usuarioInput.value.trim();
-    const senha = senhaInput.value;
+    const senha   = senhaInput.value;
 
-    if (!usuario || !senha) {
-        alert("Preencha usuário e senha!");
-        return;
-    }
+    if (!usuario || !senha) { alert("Preencha usuário e senha!"); return; }
 
     btn.disabled = true;
     btn.innerText = "Verificando...";
@@ -59,18 +59,14 @@ async function fazerLoginAPI() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ usuario, senha })
         });
-
         if (!response.ok) throw new Error("Usuário ou senha incorretos.");
-
         const dados = await response.json();
-        
         localStorage.setItem("yuyu_session", JSON.stringify(dados));
         iniciarWebSocket(dados);
-
     } catch (erro) {
         errorMsg.innerText = erro.message;
         errorMsg.style.display = 'block';
-        senhaInput.value = ""; 
+        senhaInput.value = "";
         usuarioInput.focus();
     } finally {
         btn.disabled = false;
@@ -81,60 +77,64 @@ async function fazerLoginAPI() {
 function verificarSessaoExistente() {
     const salvo = localStorage.getItem("yuyu_session");
     if (salvo) {
-        try {
-            const dados = JSON.parse(salvo);
-            iniciarWebSocket(dados);
-        } catch (e) {
-            console.error("Erro ao recuperar sessão:", e);
-        }
+        try { iniciarWebSocket(JSON.parse(salvo)); }
+        catch (e) { console.error("Erro ao recuperar sessão:", e); }
     }
 }
 
 function iniciarWebSocket(dados) {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        if (ws._heartbeatTimer) clearInterval(ws._heartbeatTimer);
         ws.close();
     }
 
     meuNomeReal = dados.nome;
-    meuPerfil = dados.perfil; 
+    meuPerfil   = dados.perfil;
     minhaEquipe = dados.equipe;
-    
+
     let meuCargo = dados.cargo_exibicao;
     if (!meuCargo || meuCargo === "Colaborador") meuCargo = "Operador";
 
     meuId = `${meuNomeReal}-${minhaEquipe}`.toLowerCase().replace(/\s+/g, '');
-    
-    const nomeSeguro = encodeURIComponent(meuNomeReal);
+
+    const nomeSeguro  = encodeURIComponent(meuNomeReal);
     const equipeSegura = encodeURIComponent(minhaEquipe);
-    const cargoSeguro = encodeURIComponent(meuCargo); 
-    
+    const cargoSeguro  = encodeURIComponent(meuCargo);
+
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${protocol}://${window.location.host}/ws/${meuPerfil}/${nomeSeguro}/${equipeSegura}/${cargoSeguro}`;
-    
-    ws = new WebSocket(wsUrl);
+    ws = new WebSocket(`${protocol}://${window.location.host}/ws/${meuPerfil}/${nomeSeguro}/${equipeSegura}/${cargoSeguro}`);
 
     ws.onopen = () => {
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('app-screen').style.display = 'block';
-        
-        document.getElementById('welcome-msg').innerText = `Olá, ${meuNomeReal}`;
-        document.getElementById('welcome-team').innerText = `${minhaEquipe} (${meuCargo})`;
-        
-        const titulo = document.getElementById('list-title');
-        titulo.innerText = meuPerfil === 'supervisor' ? "Painel de Controle (Todos Online)" : "Supervisores Disponíveis";
-        
+        document.getElementById('login-screen').style.display  = 'none';
+        document.getElementById('app-screen').style.display    = 'block';
+        document.getElementById('welcome-msg').innerText        = `Olá, ${meuNomeReal}`;
+        document.getElementById('welcome-team').innerText       = `${minhaEquipe} (${meuCargo})`;
+        document.getElementById('list-title').innerText         = meuPerfil === 'supervisor'
+            ? "Painel de Controle (Todos Online)"
+            : "Supervisores Disponíveis";
+
         if (meuPerfil === 'supervisor') {
             document.getElementById('btn-broadcast').style.display = 'inline-block';
         }
+
+        // ── HEARTBEAT ─────────────────────────────────────────────────────────
+        // { ping: true } a cada 25s para manter a conexão TCP ativa.
+        if (ws._heartbeatTimer) clearInterval(ws._heartbeatTimer);
+        ws._heartbeatTimer = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ ping: true }));
+            }
+        }, 25000);
     };
 
-    ws.onclose = (event) => {
-        console.log("Conexão perdida.");
+    ws.onclose = () => {
+        console.log("Conexão perdida. Reconectando em 5s...");
+        if (ws._heartbeatTimer) clearInterval(ws._heartbeatTimer);
         if (localStorage.getItem("yuyu_session")) {
-            ws = null; 
+            ws = null;
             setTimeout(() => {
-                const dadosRec = JSON.parse(localStorage.getItem("yuyu_session"));
-                if(dadosRec) iniciarWebSocket(dadosRec);
+                const d = JSON.parse(localStorage.getItem("yuyu_session"));
+                if (d) iniciarWebSocket(d);
             }, 5000);
         }
     };
@@ -144,19 +144,18 @@ function iniciarWebSocket(dados) {
         if (payload.tipo === "lista_usuarios") {
             listaUsuariosOnlineCache = payload.usuarios;
             atualizarListaUsuarios(payload.usuarios);
-        } 
-        else if (payload.tipo === "mensagem_privada") {
+        } else if (payload.tipo === "mensagem_privada") {
             receberMensagem(payload);
-        }
-        else if (payload.tipo === "confirmacao_leitura") {
+        } else if (payload.tipo === "confirmacao_leitura") {
             marcarMensagensComoLidas(payload.quem_leu_id);
         }
+        // pong / outros tipos ignorados silenciosamente
     };
 }
 
 function atualizarListaUsuarios(usuarios) {
     const grid = document.getElementById('user-grid');
-    
+
     const notificacoesAtivas = {};
     document.querySelectorAll('.card-notification.show').forEach(badge => {
         const userId = badge.parentElement.id.replace('card-', '');
@@ -164,26 +163,20 @@ function atualizarListaUsuarios(usuarios) {
     });
 
     grid.innerHTML = "";
-    
-    // --- 1. COLETA AS CARTEIRAS APENAS DE OPERADORES ---
+
     const equipesUnicas = new Set();
     usuarios.forEach(u => {
         const cargoL = (u.cargo_exibicao || "Operador").toLowerCase();
         const isOp = !cargoL.includes('t.i') && !cargoL.includes('monitor') && !cargoL.includes('auxiliar') && u.perfil !== 'supervisor';
-        if (isOp && u.equipe) {
-            equipesUnicas.add(u.equipe);
-        }
+        if (isOp && u.equipe) equipesUnicas.add(u.equipe);
     });
 
-    // --- 2. RENDERIZA O MENU DE FILTRO ---
     const menuFiltro = document.getElementById('menu-filtro-equipes');
     menuFiltro.innerHTML = '';
-    
-    let btnFiltroText = "Carteiras: Todas ▼";
-    if (equipesSelecionadas.length > 0) {
-        btnFiltroText = `Carteiras: ${equipesSelecionadas.length} selecionada(s) ▼`;
-    }
-    document.getElementById('btn-filtro-equipe').innerText = btnFiltroText;
+
+    document.getElementById('btn-filtro-equipe').innerText = equipesSelecionadas.length > 0
+        ? `Carteiras: ${equipesSelecionadas.length} selecionada(s) ▾`
+        : "Carteiras: Todas ▾";
 
     if (equipesUnicas.size > 0) {
         document.getElementById('multi-select-container').style.display = 'inline-block';
@@ -193,122 +186,87 @@ function atualizarListaUsuarios(usuarios) {
                 <label class="filtro-item">
                     <input type="checkbox" value="${eq}" onchange="aplicarFiltroEquipes()" ${isChecked}>
                     ${eq}
-                </label>
-            `;
+                </label>`;
         });
     } else {
         document.getElementById('multi-select-container').style.display = 'none';
     }
 
-    // --- 3. ORDENAÇÃO E RENDERIZAÇÃO DOS CARDS ---
     const getPesoCargo = (u) => {
         const cargo = (u.cargo_exibicao || "").toLowerCase();
-        const perfil = (u.perfil || "").toLowerCase();
         if (cargo.includes('t.i') || cargo.includes('tecnologia')) return 1;
         if (cargo.includes('monitor') || cargo.includes('qualidade')) return 2;
-        if (perfil === 'supervisor' && !cargo.includes('auxiliar')) return 3; 
-        if (cargo.includes('auxiliar')) return 4; 
+        if (u.perfil === 'supervisor' && !cargo.includes('auxiliar')) return 3;
+        if (cargo.includes('auxiliar')) return 4;
         return 99;
     };
 
     usuarios.sort((a, b) => {
-        const pesoA = getPesoCargo(a);
-        const pesoB = getPesoCargo(b);
-        if (pesoA !== pesoB) return pesoA - pesoB;
-        return a.nome.localeCompare(b.nome);
+        const diff = getPesoCargo(a) - getPesoCargo(b);
+        return diff !== 0 ? diff : a.nome.localeCompare(b.nome);
     });
 
     usuarios.forEach(user => {
-        if (user.id === meuId) return; 
+        if (user.id === meuId) return;
 
-        let cargoShow = user.cargo_exibicao || "Operador"; 
+        let cargoShow = user.cargo_exibicao || "Operador";
         if (cargoShow === "Colaborador") cargoShow = "Operador";
         const cargoLower = cargoShow.toLowerCase();
-        
-        const isTI = cargoLower.includes('t.i') || cargoLower.includes('tecnologia');
+
+        const isTI       = cargoLower.includes('t.i') || cargoLower.includes('tecnologia');
         const isMonitoria = cargoLower.includes('monitor') || cargoLower.includes('qualidade');
-        const isAuxiliar = cargoLower.includes('auxiliar'); 
+        const isAuxiliar  = cargoLower.includes('auxiliar');
         const isSupervisor = user.perfil === 'supervisor' && !isTI && !isMonitoria && !isAuxiliar;
-        
-        const isOperador = !isTI && !isMonitoria && !isAuxiliar && user.perfil !== 'supervisor';
+        const isOperador   = !isTI && !isMonitoria && !isAuxiliar && user.perfil !== 'supervisor';
 
-        // === FILTRO SÓ AFETA OPERADORES ===
-        if (isOperador && equipesSelecionadas.length > 0) {
-            if (!equipesSelecionadas.includes(user.equipe)) {
-                return; 
-            }
-        }
+        if (isOperador && equipesSelecionadas.length > 0 && !equipesSelecionadas.includes(user.equipe)) return;
 
-        let mostrar = false;
-        if (meuPerfil === 'supervisor') {
-            mostrar = true;
-        } else {
-            if (user.perfil === 'supervisor') mostrar = true;
-        }
+        const mostrar = meuPerfil === 'supervisor' || user.perfil === 'supervisor';
+        if (!mostrar) return;
 
-        if (mostrar) {
-            const card = document.createElement('div');
-            card.className = 'user-card online';
-            card.id = `card-${user.id}`; 
-            
-            const isMinhaEquipe = (user.equipe === minhaEquipe);
-            
-            let icone = "🎧"; 
-            let classeExtra = "";
-            if (isTI) { icone = "💻"; classeExtra = "ti-card"; } 
-            else if (isMonitoria) { icone = "📊"; classeExtra = "monitoria-card"; } 
-            else if (isAuxiliar) { icone = "🛡️"; classeExtra = "auxiliar-card"; } 
-            else if (isSupervisor) { icone = "⭐"; classeExtra = "supervisor-card"; }
+        const card = document.createElement('div');
+        card.className = 'user-card online';
+        card.id = `card-${user.id}`;
 
-            if (classeExtra) card.classList.add(classeExtra);
-            if (isMinhaEquipe) card.style.borderColor = "var(--primary)";
+        let icone = "🎧", classeExtra = "";
+        if (isTI)        { icone = "💻"; classeExtra = "ti-card"; }
+        else if (isMonitoria) { icone = "📊"; classeExtra = "monitoria-card"; }
+        else if (isAuxiliar)  { icone = "🛡️"; classeExtra = "auxiliar-card"; }
+        else if (isSupervisor){ icone = "⭐"; classeExtra = "supervisor-card"; }
 
-            card.innerHTML = `
-                <div class="card-notification" id="notif-${user.id}">0</div>
-                <div class="card-header">
-                    <span class="card-name">${icone} ${user.nome}</span>
-                </div>
-                <div class="badges">
-                    <span class="badge" style="font-weight:bold;">${user.equipe}</span>
-                    <span class="badge" style="font-size:0.75rem; background:#eee; color:#333; padding:2px 6px; border-radius:4px;">
-                        ${cargoShow}
-                    </span>
-                </div>
-            `;
-            card.onclick = () => abrirPopup(user.id, user.nome);
-            grid.appendChild(card);
+        if (classeExtra) card.classList.add(classeExtra);
+        if (user.equipe === minhaEquipe) card.style.borderColor = "var(--primary)";
 
-            if (notificacoesAtivas[user.id]) {
-                atualizarNotificacaoCard(user.id, parseInt(notificacoesAtivas[user.id]));
-            }
+        card.innerHTML = `
+            <div class="card-notification" id="notif-${user.id}">0</div>
+            <div class="card-header">
+                <span class="card-name">${icone} ${user.nome}</span>
+            </div>
+            <div class="badges">
+                <span class="badge" style="font-weight:bold;">${user.equipe}</span>
+                <span class="badge">${cargoShow}</span>
+            </div>`;
+        card.onclick = () => abrirPopup(user.id, user.nome);
+        grid.appendChild(card);
+
+        if (notificacoesAtivas[user.id]) {
+            atualizarNotificacaoCard(user.id, parseInt(notificacoesAtivas[user.id]));
         }
     });
 }
 
 function atualizarNotificacaoCard(userId, qtd) {
     const badge = document.getElementById(`notif-${userId}`);
-    if (badge) {
-        if (qtd > 0) {
-            badge.innerText = qtd;
-            badge.classList.add('show');
-        } else {
-            badge.classList.remove('show');
-            badge.innerText = "0";
-        }
-    }
+    if (!badge) return;
+    if (qtd > 0) { badge.innerText = qtd; badge.classList.add('show'); }
+    else { badge.classList.remove('show'); badge.innerText = "0"; }
 }
 
 function atualizarNotificacaoPopup(targetId, qtd) {
     const badge = document.getElementById(`popup-notif-${targetId}`);
-    if (badge) {
-        if (qtd > 0) {
-            badge.innerText = qtd;
-            badge.classList.add('show');
-        } else {
-            badge.classList.remove('show');
-            badge.innerText = "0";
-        }
-    }
+    if (!badge) return;
+    if (qtd > 0) { badge.innerText = qtd; badge.classList.add('show'); }
+    else { badge.classList.remove('show'); badge.innerText = "0"; }
 }
 
 function limparNotificacoes(targetId) {
@@ -319,60 +277,41 @@ function limparNotificacoes(targetId) {
 
 function abrirPopup(targetId, targetName) {
     const container = document.getElementById('popups-container');
-
     limparNotificacoes(targetId);
 
     if (chatsAbertos[targetId]) {
         const popup = chatsAbertos[targetId];
-        
         container.appendChild(popup);
-        
         popup.classList.remove('minimized');
-        
         atualizarNotificacaoPopup(targetId, 0);
-
         const input = popup.querySelector('input');
-        if(input) {
-            setTimeout(() => input.focus(), 50);
-            enviarConfirmacaoLeitura(targetId);
-        }
+        if (input) { setTimeout(() => input.focus(), 50); enviarConfirmacaoLeitura(targetId); }
         return;
     }
 
     const popup = document.createElement('div');
     popup.className = 'chat-popup';
     popup.id = `popup-${targetId}`;
-
     popup.innerHTML = `
         <div class="popup-header" title="${targetName}">
             <span class="chat-title">${targetName}</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
                 <div class="popup-notification" id="popup-notif-${targetId}">0</div>
                 <button class="close-btn">×</button>
             </div>
         </div>
         <div class="popup-body" id="msgs-${targetId}" onclick="limparNotificacoes('${targetId}')"></div>
         <div class="popup-footer">
-            <input type="text" placeholder="Digite..." 
+            <input type="text" placeholder="Digite..."
                 onkeypress="handleEnter('${targetId}', event)"
-                onfocus="limparNotificacoes('${targetId}')" 
+                onfocus="limparNotificacoes('${targetId}')"
                 onclick="limparNotificacoes('${targetId}')"
-                autocomplete="off"
-            >
-        </div>
-    `;
+                autocomplete="off">
+        </div>`;
 
-    const header = popup.querySelector('.popup-header');
-    const closeBtn = popup.querySelector('.close-btn');
-
-    closeBtn.onclick = (e) => {
-        e.stopPropagation();
-        fecharPopup(targetId);
-    };
-
-    header.onclick = () => {
+    popup.querySelector('.close-btn').onclick = (e) => { e.stopPropagation(); fecharPopup(targetId); };
+    popup.querySelector('.popup-header').onclick = () => {
         popup.classList.toggle('minimized');
-        
         if (!popup.classList.contains('minimized')) {
             limparNotificacoes(targetId);
             const input = popup.querySelector('input');
@@ -382,41 +321,26 @@ function abrirPopup(targetId, targetName) {
 
     container.appendChild(popup);
     chatsAbertos[targetId] = popup;
-
     carregarHistoricoLocal(targetId);
     enviarConfirmacaoLeitura(targetId);
 }
 
 function fecharPopup(targetId) {
     const popup = chatsAbertos[targetId];
-    if (popup) {
-        popup.remove();
-        delete chatsAbertos[targetId];
-    }
+    if (popup) { popup.remove(); delete chatsAbertos[targetId]; }
 }
 
 function handleEnter(targetId, event) {
-    if (event.key === 'Enter') {
-        const input = event.target;
-        const texto = input.value.trim();
-        
-        if (texto) {
-            const mensagemId = gerarUUID(); 
-
-            const dadosMsg = {
-                target_id: targetId,
-                message: texto,
-                msg_id: mensagemId 
-            };
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(dadosMsg));
-                input.value = "";
-                input.focus();
-            } else {
-                console.warn("Socket fechado, tentando reconectar...");
-            }
-        }
+    if (event.key !== 'Enter') return;
+    const input = event.target;
+    const texto = input.value.trim();
+    if (!texto) return;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ target_id: targetId, message: texto, msg_id: gerarUUID() }));
+        input.value = "";
+        input.focus();
+    } else {
+        console.warn("Socket fechado, tentando reconectar...");
     }
 }
 
@@ -427,144 +351,116 @@ function enviarConfirmacaoLeitura(targetId) {
 }
 
 function marcarMensagensComoLidas(leitorId) {
-    const bodyChat = document.getElementById(`msgs-${leitorId}`);
-    if (bodyChat) {
-        const checks = bodyChat.querySelectorAll('.msg-check');
-        checks.forEach(check => check.classList.add('lido'));
-    }
+    document.querySelectorAll(`#msgs-${leitorId} .msg-check`).forEach(c => c.classList.add('lido'));
 }
 
 function receberMensagem(dados) {
-    let idConversa = (dados.remetente_id === "eu") ? dados.destinatario_id : dados.remetente_id;
-    let classeCss = (dados.remetente_id === "eu") ? "enviada" : "recebida";
-    let nomeExibir = (classeCss === "recebida") ? dados.remetente_nome : "Eu";
+    const idConversa = (dados.remetente_id === "eu") ? dados.destinatario_id : dados.remetente_id;
+    const classeCss  = (dados.remetente_id === "eu") ? "enviada" : "recebida";
+    const nomeExibir = (classeCss === "recebida") ? dados.remetente_nome : "Eu";
 
     salvarMensagemLocal(idConversa, {
-        texto: dados.texto,
-        classe: classeCss,
-        hora: dados.hora,
-        nome: nomeExibir, 
+        texto: dados.texto, classe: classeCss,
+        hora: dados.hora, nome: nomeExibir,
         timestamp: new Date().getTime()
     });
 
-    let jaRenderizouViaHistorico = false;
+    let jaRenderizou = false;
 
     if (classeCss === "recebida") {
         notificacaoAudio.play().catch(() => {});
-        
-        if (document.hidden) { 
-            mensagensNaoLidas++;
-            document.title = `(${mensagensNaoLidas}) Nova Mensagem`;
-        }
+        if (document.hidden) { mensagensNaoLidas++; document.title = `(${mensagensNaoLidas}) Nova Mensagem`; }
 
         if (!chatsAbertos[idConversa]) {
             abrirPopup(idConversa, dados.remetente_nome);
-            jaRenderizouViaHistorico = true;
+            jaRenderizou = true;
         }
 
         const popup = chatsAbertos[idConversa];
         if (popup) {
             const input = popup.querySelector('input');
-            
-            const isFocado = (document.activeElement === input && document.hasFocus());
+            const isFocado    = (document.activeElement === input && document.hasFocus());
             const isMinimizado = popup.classList.contains('minimized');
 
             if (isMinimizado || !isFocado) {
                 const cardBadge = document.getElementById(`notif-${idConversa}`);
-                let cardCount = cardBadge && cardBadge.innerText ? parseInt(cardBadge.innerText) : 0;
-                atualizarNotificacaoCard(idConversa, cardCount + 1);
-
+                atualizarNotificacaoCard(idConversa, (cardBadge ? parseInt(cardBadge.innerText) || 0 : 0) + 1);
                 const popupBadge = document.getElementById(`popup-notif-${idConversa}`);
-                let popupCount = popupBadge && popupBadge.innerText ? parseInt(popupBadge.innerText) : 0;
-                atualizarNotificacaoPopup(idConversa, popupCount + 1);
+                atualizarNotificacaoPopup(idConversa, (popupBadge ? parseInt(popupBadge.innerText) || 0 : 0) + 1);
             } else {
                 setTimeout(() => enviarConfirmacaoLeitura(idConversa), 500);
             }
         }
     }
 
-    if (!jaRenderizouViaHistorico) {
-        renderizarMensagem(idConversa, dados.texto, classeCss, dados.hora, nomeExibir);
-    }
+    if (!jaRenderizou) renderizarMensagem(idConversa, dados.texto, classeCss, dados.hora);
 }
 
 function renderizarMensagem(idConversa, texto, classe, hora) {
     const bodyChat = document.getElementById(`msgs-${idConversa}`);
-    if (bodyChat) {
-        const balao = document.createElement('div');
-        balao.className = `msg ${classe}`;
-        balao.innerHTML = `
-            <span>${texto}</span>
-            <div class="msg-meta">
-                <span>${hora}</span>
-                <span class="msg-check">✓✓</span>
-            </div>
-        `;
-        bodyChat.appendChild(balao);
-        bodyChat.scrollTop = bodyChat.scrollHeight;
-    }
+    if (!bodyChat) return;
+    const balao = document.createElement('div');
+    balao.className = `msg ${classe}`;
+    balao.innerHTML = `
+        <span>${texto}</span>
+        <div class="msg-meta">
+            <span>${hora}</span>
+            <span class="msg-check">✓✓</span>
+        </div>`;
+    bodyChat.appendChild(balao);
+    bodyChat.scrollTop = bodyChat.scrollHeight;
 }
 
 function salvarMensagemLocal(idConversa, msgObj) {
-    let historico = JSON.parse(localStorage.getItem("yuyu_chat_history")) || {};
-    if (!historico[idConversa]) historico[idConversa] = [];
-    historico[idConversa].push(msgObj);
-    localStorage.setItem("yuyu_chat_history", JSON.stringify(historico));
+    let h = JSON.parse(localStorage.getItem("yuyu_chat_history")) || {};
+    if (!h[idConversa]) h[idConversa] = [];
+    h[idConversa].push(msgObj);
+    localStorage.setItem("yuyu_chat_history", JSON.stringify(h));
 }
 
 function carregarHistoricoLocal(idConversa) {
-    let historico = JSON.parse(localStorage.getItem("yuyu_chat_history")) || {};
-    if (historico[idConversa]) {
-        historico[idConversa].forEach(msg => {
-            renderizarMensagem(idConversa, msg.texto, msg.classe, msg.hora);
-        });
-    }
+    const h = JSON.parse(localStorage.getItem("yuyu_chat_history")) || {};
+    (h[idConversa] || []).forEach(msg => renderizarMensagem(idConversa, msg.texto, msg.classe, msg.hora));
 }
 
 function limparHistoricoAntigo() {
-    let historico = JSON.parse(localStorage.getItem("yuyu_chat_history"));
-    if (!historico) return;
-    const agora = new Date().getTime();
-    const umDia = 24 * 60 * 60 * 1000;
-    for (let idConv in historico) {
-        historico[idConv] = historico[idConv].filter(msg => (agora - msg.timestamp) < umDia);
-        if (historico[idConv].length === 0) delete historico[idConv];
+    let h = JSON.parse(localStorage.getItem("yuyu_chat_history"));
+    if (!h) return;
+    const limite = new Date().getTime() - 24 * 60 * 60 * 1000;
+    for (let id in h) {
+        h[id] = h[id].filter(m => m.timestamp > limite);
+        if (!h[id].length) delete h[id];
     }
-    localStorage.setItem("yuyu_chat_history", JSON.stringify(historico));
+    localStorage.setItem("yuyu_chat_history", JSON.stringify(h));
 }
 
 function gerarUUID() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
-// Função de Lista de Transmissão (BROADCAST)
-
+// ── BROADCAST ─────────────────────────────────────────────────────────────
 
 function abrirModalBroadcast() {
     const listaDiv = document.getElementById('lista-destinatarios');
     listaDiv.innerHTML = "";
     document.getElementById('check-todos').checked = false;
     document.getElementById('texto-broadcast').value = "";
-    
-    const inputPesquisa = document.getElementById('pesquisa-broadcast');
-    if (inputPesquisa) inputPesquisa.value = "";
+    const ip = document.getElementById('pesquisa-broadcast');
+    if (ip) ip.value = "";
 
     const alvos = listaUsuariosOnlineCache.filter(u => u.id !== meuId);
-
-    if (alvos.length === 0) {
-        listaDiv.innerHTML = "<p style='color: var(--text-muted);'>Nenhum usuário online disponível.</p>";
+    if (!alvos.length) {
+        listaDiv.innerHTML = "<p style='color:var(--text-muted);'>Nenhum usuário online disponível.</p>";
     } else {
         alvos.forEach(user => {
             let cargo = user.cargo_exibicao || "Operador";
             listaDiv.innerHTML += `
                 <label class="item-destinatario">
-                    <input type="checkbox" class="check-destinatario" value="${user.id}"> 
-                    <span class="nome-alvo"><b>${user.nome}</b> <span style="font-size: 0.75rem; color: var(--text-muted);">(${cargo})</span></span>
-                </label>
-            `;
+                    <input type="checkbox" class="check-destinatario" value="${user.id}">
+                    <span class="nome-alvo"><b>${user.nome}</b> <span style="font-size:0.75rem;color:var(--text-muted);">(${cargo})</span></span>
+                </label>`;
         });
     }
-
     document.getElementById('modal-broadcast').style.display = 'flex';
 }
 
@@ -574,23 +470,15 @@ function fecharModalBroadcast() {
 
 function filtrarBroadcast() {
     const termo = document.getElementById('pesquisa-broadcast').value.toLowerCase();
-    const itens = document.querySelectorAll('.item-destinatario');
-    
-    itens.forEach(item => {
+    document.querySelectorAll('.item-destinatario').forEach(item => {
         const nome = item.querySelector('.nome-alvo').innerText.toLowerCase();
-        if (nome.includes(termo)) {
-            item.style.setProperty('display', 'flex', 'important');
-        } else {
-            item.style.setProperty('display', 'none', 'important');
-        }
+        item.style.setProperty('display', nome.includes(termo) ? 'flex' : 'none', 'important');
     });
 }
 
 function toggleTodosBroadcast() {
     const marcar = document.getElementById('check-todos').checked;
-    const itensVisiveis = document.querySelectorAll('.item-destinatario');
-    
-    itensVisiveis.forEach(item => {
+    document.querySelectorAll('.item-destinatario').forEach(item => {
         if (item.style.display !== 'none') {
             const cb = item.querySelector('.check-destinatario');
             if (cb) cb.checked = marcar;
@@ -601,63 +489,44 @@ function toggleTodosBroadcast() {
 function enviarBroadcast() {
     const checkboxes = document.querySelectorAll('.check-destinatario:checked');
     const texto = document.getElementById('texto-broadcast').value.trim();
-
-    if (checkboxes.length === 0) {
-        alert("Selecione pelo menos um destinatário.");
-        return;
-    }
-    if (!texto) {
-        alert("Digite uma mensagem para enviar.");
-        return;
-    }
+    if (!checkboxes.length) { alert("Selecione pelo menos um destinatário."); return; }
+    if (!texto) { alert("Digite uma mensagem para enviar."); return; }
 
     const alvosIds = Array.from(checkboxes).map(cb => cb.value);
     const textoFinal = `📢 [AVISO]: ${texto}`;
 
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-            broadcast_targets: alvosIds,
-            message: textoFinal,
-            msg_id: gerarUUID() 
-        }));
-        
+        ws.send(JSON.stringify({ broadcast_targets: alvosIds, message: textoFinal, msg_id: gerarUUID() }));
         const agora = new Date();
         const horaStr = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        
-        alvosIds.forEach(alvoId => {
-            salvarMensagemLocal(alvoId, {
-                texto: textoFinal,
-                classe: 'enviada',
-                hora: horaStr,
-                nome: "Eu", 
-                timestamp: agora.getTime()
-            });
-
-            if (chatsAbertos[alvoId]) {
-                renderizarMensagem(alvoId, textoFinal, 'enviada', horaStr);
-            }
+        alvosIds.forEach(id => {
+            salvarMensagemLocal(id, { texto: textoFinal, classe: 'enviada', hora: horaStr, nome: "Eu", timestamp: agora.getTime() });
+            if (chatsAbertos[id]) renderizarMensagem(id, textoFinal, 'enviada', horaStr);
         });
-
         alert(`Aviso enviado com sucesso para ${alvosIds.length} operador(es)!`);
         fecharModalBroadcast();
     } else {
         alert("Erro: Conexão com o servidor perdida.");
     }
 }
+
+// ── FILTRO DE CARTEIRAS ───────────────────────────────────────────────────
+
 function toggleMenuFiltro() {
     document.getElementById('menu-filtro-equipes').classList.toggle('show');
 }
 
 function aplicarFiltroEquipes() {
-    const checkboxes = document.querySelectorAll('#menu-filtro-equipes input[type="checkbox"]:checked');
-    equipesSelecionadas = Array.from(checkboxes).map(cb => cb.value);
-    atualizarListaUsuarios(listaUsuariosOnlineCache); 
+    equipesSelecionadas = Array.from(
+        document.querySelectorAll('#menu-filtro-equipes input[type="checkbox"]:checked')
+    ).map(cb => cb.value);
+    atualizarListaUsuarios(listaUsuariosOnlineCache);
 }
 
 document.addEventListener('click', function(event) {
     const container = document.getElementById('multi-select-container');
     const menu = document.getElementById('menu-filtro-equipes');
-    if (container && !container.contains(event.target)) {
-        if(menu) menu.classList.remove('show');
+    if (container && !container.contains(event.target) && menu) {
+        menu.classList.remove('show');
     }
 });
