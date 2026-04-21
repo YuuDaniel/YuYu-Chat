@@ -1,14 +1,13 @@
 let ws;
-let meuId = "";
-let meuPerfil = "";
-let minhaEquipe = "";
-let meuNomeReal = "";
+let meuId        = "";
+let meuPerfil    = "";
+let minhaEquipe  = "";
+let meuNomeReal  = "";
 let chatsAbertos = {};
 let mensagensNaoLidas = 0;
-let equipesSelecionadas = [];
-let filtroEquipeAtual = "TODAS";
+let equipesSelecionadas  = [];
 let listaUsuariosOnlineCache = [];
-const tituloOriginal = document.title;
+const tituloOriginal  = document.title;
 const notificacaoAudio = new Audio('/static/sounds/notification-sound-effect-372475.mp3');
 
 window.onload = function() {
@@ -21,55 +20,64 @@ window.onfocus = function() {
     document.title = tituloOriginal;
 };
 
+// ── UTILITÁRIO: gera iniciais a partir do nome completo ──────────────────
+function gerarIniciais(nome) {
+    const partes = (nome || "").trim().split(" ").filter(Boolean);
+    return partes.length >= 2
+        ? (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
+        : (nome || "--").substring(0, 2).toUpperCase();
+}
+
 function logout() {
     localStorage.removeItem("yuyu_session");
     if (ws) {
-        if (ws._heartbeatTimer) clearInterval(ws._heartbeatTimer);
+        if (ws._heartbeatTimer)    clearInterval(ws._heartbeatTimer);
+        if (ws._visibilityHandler) document.removeEventListener("visibilitychange", ws._visibilityHandler);
         ws.close();
     }
     window.location.href = window.location.origin;
 }
 
 function handleLoginEnter(e) {
-    if (e.key === 'Enter') fazerLoginAPI();
+    if (e.key === "Enter") fazerLoginAPI();
 }
 
 function toggleTheme() {
-    document.body.classList.toggle('dark-mode');
+    document.body.classList.toggle("dark-mode");
 }
 
 async function fazerLoginAPI() {
-    const usuarioInput = document.getElementById('usuario-ad');
-    const senhaInput   = document.getElementById('senha-ad');
-    const btn          = document.getElementById('btn-entrar');
-    const errorMsg     = document.getElementById('error-msg');
+    const usuarioInput = document.getElementById("usuario-ad");
+    const senhaInput   = document.getElementById("senha-ad");
+    const btn          = document.getElementById("btn-entrar");
+    const errorMsg     = document.getElementById("error-msg");
 
     const usuario = usuarioInput.value.trim();
     const senha   = senhaInput.value;
 
     if (!usuario || !senha) { alert("Preencha usuário e senha!"); return; }
 
-    btn.disabled = true;
+    btn.disabled  = true;
     btn.innerText = "Verificando...";
-    errorMsg.style.display = 'none';
+    errorMsg.style.display = "none";
 
     try {
-        const response = await fetch('/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ usuario, senha })
+        const response = await fetch("/login", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ usuario, senha }),
         });
         if (!response.ok) throw new Error("Usuário ou senha incorretos.");
         const dados = await response.json();
         localStorage.setItem("yuyu_session", JSON.stringify(dados));
         iniciarWebSocket(dados);
     } catch (erro) {
-        errorMsg.innerText = erro.message;
-        errorMsg.style.display = 'block';
-        senhaInput.value = "";
+        errorMsg.innerText     = erro.message;
+        errorMsg.style.display = "block";
+        senhaInput.value       = "";
         usuarioInput.focus();
     } finally {
-        btn.disabled = false;
+        btn.disabled  = false;
         btn.innerText = "Entrar";
     }
 }
@@ -84,7 +92,8 @@ function verificarSessaoExistente() {
 
 function iniciarWebSocket(dados) {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        if (ws._heartbeatTimer) clearInterval(ws._heartbeatTimer);
+        if (ws._heartbeatTimer)    clearInterval(ws._heartbeatTimer);
+        if (ws._visibilityHandler) document.removeEventListener("visibilitychange", ws._visibilityHandler);
         ws.close();
     }
 
@@ -95,41 +104,66 @@ function iniciarWebSocket(dados) {
     let meuCargo = dados.cargo_exibicao;
     if (!meuCargo || meuCargo === "Colaborador") meuCargo = "Operador";
 
-    meuId = `${meuNomeReal}-${minhaEquipe}`.toLowerCase().replace(/\s+/g, '');
+    meuId = `${meuNomeReal}-${minhaEquipe}`.toLowerCase().replace(/\s+/g, "");
 
-    const nomeSeguro  = encodeURIComponent(meuNomeReal);
-    const equipeSegura = encodeURIComponent(minhaEquipe);
-    const cargoSeguro  = encodeURIComponent(meuCargo);
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
 
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${protocol}://${window.location.host}/ws/${meuPerfil}/${nomeSeguro}/${equipeSegura}/${cargoSeguro}`);
+    // ── URL com token (rota autenticada) ou legada como fallback ─────────
+    const wsUrl = dados.token
+        ? `${protocol}://${window.location.host}/ws/${dados.token}`
+        : `${protocol}://${window.location.host}/ws/${dados.perfil}/${encodeURIComponent(meuNomeReal)}/${encodeURIComponent(minhaEquipe)}/${encodeURIComponent(meuCargo)}`;
+
+    ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-        document.getElementById('login-screen').style.display  = 'none';
-        document.getElementById('app-screen').style.display    = 'block';
-        document.getElementById('welcome-msg').innerText        = `Olá, ${meuNomeReal}`;
-        document.getElementById('welcome-team').innerText       = `${minhaEquipe} (${meuCargo})`;
-        document.getElementById('list-title').innerText         = meuPerfil === 'supervisor'
+        document.getElementById("login-screen").style.display = "none";
+        document.getElementById("app-screen").style.display   = "block";
+        document.getElementById("welcome-msg").innerText       = `Olá, ${meuNomeReal}`;
+        document.getElementById("welcome-team").innerText      = `${minhaEquipe} (${meuCargo})`;
+        document.getElementById("list-title").innerText        = meuPerfil === "supervisor"
             ? "Painel de Controle (Todos Online)"
             : "Supervisores Disponíveis";
 
-        if (meuPerfil === 'supervisor') {
-            document.getElementById('btn-broadcast').style.display = 'inline-block';
+        // Avatar — gerado diretamente aqui, sem setInterval
+        const avatarEl = document.getElementById("header-avatar");
+        if (avatarEl) avatarEl.textContent = gerarIniciais(meuNomeReal);
+
+        if (meuPerfil === "supervisor") {
+            document.getElementById("btn-broadcast").style.display = "inline-block";
         }
 
-        // ── HEARTBEAT ─────────────────────────────────────────────────────────
-        // { ping: true } a cada 25s para manter a conexão TCP ativa.
+        // ── HEARTBEAT ─────────────────────────────────────────────────────
+        // { ping: true } a cada 25s mantém o TCP ativo.
         if (ws._heartbeatTimer) clearInterval(ws._heartbeatTimer);
         ws._heartbeatTimer = setInterval(() => {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ ping: true }));
             }
         }, 25000);
+
+        // ── VISIBILITYCHANGE ───────────────────────────────────────────────
+        // Browsers suspendem setInterval em abas ocultas; ao voltar ao foco,
+        // reconecta imediatamente se a conexão caiu, ou envia ping se ainda viva.
+        if (ws._visibilityHandler) {
+            document.removeEventListener("visibilitychange", ws._visibilityHandler);
+        }
+        ws._visibilityHandler = function() {
+            if (document.hidden) return;
+            if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                console.log("Aba voltou ao foco com conexão morta — reconectando...");
+                const d = JSON.parse(localStorage.getItem("yuyu_session"));
+                if (d) iniciarWebSocket(d);
+            } else if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ ping: true }));
+            }
+        };
+        document.addEventListener("visibilitychange", ws._visibilityHandler);
     };
 
     ws.onclose = () => {
         console.log("Conexão perdida. Reconectando em 5s...");
-        if (ws._heartbeatTimer) clearInterval(ws._heartbeatTimer);
+        if (ws._heartbeatTimer)    clearInterval(ws._heartbeatTimer);
+        if (ws._visibilityHandler) document.removeEventListener("visibilitychange", ws._visibilityHandler);
         if (localStorage.getItem("yuyu_session")) {
             ws = null;
             setTimeout(() => {
@@ -149,16 +183,15 @@ function iniciarWebSocket(dados) {
         } else if (payload.tipo === "confirmacao_leitura") {
             marcarMensagensComoLidas(payload.quem_leu_id);
         }
-        // pong / outros tipos ignorados silenciosamente
     };
 }
 
 function atualizarListaUsuarios(usuarios) {
-    const grid = document.getElementById('user-grid');
+    const grid = document.getElementById("user-grid");
 
     const notificacoesAtivas = {};
-    document.querySelectorAll('.card-notification.show').forEach(badge => {
-        const userId = badge.parentElement.id.replace('card-', '');
+    document.querySelectorAll(".card-notification.show").forEach(badge => {
+        const userId = badge.parentElement.id.replace("card-", "");
         notificacoesAtivas[userId] = badge.innerText;
     });
 
@@ -167,19 +200,20 @@ function atualizarListaUsuarios(usuarios) {
     const equipesUnicas = new Set();
     usuarios.forEach(u => {
         const cargoL = (u.cargo_exibicao || "Operador").toLowerCase();
-        const isOp = !cargoL.includes('t.i') && !cargoL.includes('monitor') && !cargoL.includes('auxiliar') && u.perfil !== 'supervisor';
+        const isOp   = !cargoL.includes("t.i") && !cargoL.includes("monitor")
+                    && !cargoL.includes("auxiliar") && u.perfil !== "supervisor";
         if (isOp && u.equipe) equipesUnicas.add(u.equipe);
     });
 
-    const menuFiltro = document.getElementById('menu-filtro-equipes');
-    menuFiltro.innerHTML = '';
+    const menuFiltro = document.getElementById("menu-filtro-equipes");
+    menuFiltro.innerHTML = "";
 
-    document.getElementById('btn-filtro-equipe').innerText = equipesSelecionadas.length > 0
+    document.getElementById("btn-filtro-equipe").innerText = equipesSelecionadas.length > 0
         ? `Carteiras: ${equipesSelecionadas.length} selecionada(s) ▾`
         : "Carteiras: Todas ▾";
 
     if (equipesUnicas.size > 0) {
-        document.getElementById('multi-select-container').style.display = 'inline-block';
+        document.getElementById("multi-select-container").style.display = "inline-block";
         Array.from(equipesUnicas).sort().forEach(eq => {
             const isChecked = equipesSelecionadas.includes(eq) ? "checked" : "";
             menuFiltro.innerHTML += `
@@ -189,15 +223,15 @@ function atualizarListaUsuarios(usuarios) {
                 </label>`;
         });
     } else {
-        document.getElementById('multi-select-container').style.display = 'none';
+        document.getElementById("multi-select-container").style.display = "none";
     }
 
     const getPesoCargo = (u) => {
         const cargo = (u.cargo_exibicao || "").toLowerCase();
-        if (cargo.includes('t.i') || cargo.includes('tecnologia')) return 1;
-        if (cargo.includes('monitor') || cargo.includes('qualidade')) return 2;
-        if (u.perfil === 'supervisor' && !cargo.includes('auxiliar')) return 3;
-        if (cargo.includes('auxiliar')) return 4;
+        if (cargo.includes("t.i") || cargo.includes("tecnologia")) return 1;
+        if (cargo.includes("monitor") || cargo.includes("qualidade")) return 2;
+        if (u.perfil === "supervisor" && !cargo.includes("auxiliar")) return 3;
+        if (cargo.includes("auxiliar")) return 4;
         return 99;
     };
 
@@ -213,23 +247,23 @@ function atualizarListaUsuarios(usuarios) {
         if (cargoShow === "Colaborador") cargoShow = "Operador";
         const cargoLower = cargoShow.toLowerCase();
 
-        const isTI       = cargoLower.includes('t.i') || cargoLower.includes('tecnologia');
-        const isMonitoria = cargoLower.includes('monitor') || cargoLower.includes('qualidade');
-        const isAuxiliar  = cargoLower.includes('auxiliar');
-        const isSupervisor = user.perfil === 'supervisor' && !isTI && !isMonitoria && !isAuxiliar;
-        const isOperador   = !isTI && !isMonitoria && !isAuxiliar && user.perfil !== 'supervisor';
+        const isTI        = cargoLower.includes("t.i") || cargoLower.includes("tecnologia");
+        const isMonitoria = cargoLower.includes("monitor") || cargoLower.includes("qualidade");
+        const isAuxiliar  = cargoLower.includes("auxiliar");
+        const isSupervisor = user.perfil === "supervisor" && !isTI && !isMonitoria && !isAuxiliar;
+        const isOperador   = !isTI && !isMonitoria && !isAuxiliar && user.perfil !== "supervisor";
 
         if (isOperador && equipesSelecionadas.length > 0 && !equipesSelecionadas.includes(user.equipe)) return;
 
-        const mostrar = meuPerfil === 'supervisor' || user.perfil === 'supervisor';
+        const mostrar = meuPerfil === "supervisor" || user.perfil === "supervisor";
         if (!mostrar) return;
 
-        const card = document.createElement('div');
-        card.className = 'user-card online';
-        card.id = `card-${user.id}`;
+        const card = document.createElement("div");
+        card.className = "user-card online";
+        card.id        = `card-${user.id}`;
 
         let icone = "🎧", classeExtra = "";
-        if (isTI)        { icone = "💻"; classeExtra = "ti-card"; }
+        if (isTI)             { icone = "💻"; classeExtra = "ti-card"; }
         else if (isMonitoria) { icone = "📊"; classeExtra = "monitoria-card"; }
         else if (isAuxiliar)  { icone = "🛡️"; classeExtra = "auxiliar-card"; }
         else if (isSupervisor){ icone = "⭐"; classeExtra = "supervisor-card"; }
@@ -258,15 +292,15 @@ function atualizarListaUsuarios(usuarios) {
 function atualizarNotificacaoCard(userId, qtd) {
     const badge = document.getElementById(`notif-${userId}`);
     if (!badge) return;
-    if (qtd > 0) { badge.innerText = qtd; badge.classList.add('show'); }
-    else { badge.classList.remove('show'); badge.innerText = "0"; }
+    if (qtd > 0) { badge.innerText = qtd; badge.classList.add("show"); }
+    else         { badge.classList.remove("show"); badge.innerText = "0"; }
 }
 
 function atualizarNotificacaoPopup(targetId, qtd) {
     const badge = document.getElementById(`popup-notif-${targetId}`);
     if (!badge) return;
-    if (qtd > 0) { badge.innerText = qtd; badge.classList.add('show'); }
-    else { badge.classList.remove('show'); badge.innerText = "0"; }
+    if (qtd > 0) { badge.innerText = qtd; badge.classList.add("show"); }
+    else         { badge.classList.remove("show"); badge.innerText = "0"; }
 }
 
 function limparNotificacoes(targetId) {
@@ -276,22 +310,22 @@ function limparNotificacoes(targetId) {
 }
 
 function abrirPopup(targetId, targetName) {
-    const container = document.getElementById('popups-container');
+    const container = document.getElementById("popups-container");
     limparNotificacoes(targetId);
 
     if (chatsAbertos[targetId]) {
         const popup = chatsAbertos[targetId];
         container.appendChild(popup);
-        popup.classList.remove('minimized');
+        popup.classList.remove("minimized");
         atualizarNotificacaoPopup(targetId, 0);
-        const input = popup.querySelector('input');
+        const input = popup.querySelector("input");
         if (input) { setTimeout(() => input.focus(), 50); enviarConfirmacaoLeitura(targetId); }
         return;
     }
 
-    const popup = document.createElement('div');
-    popup.className = 'chat-popup';
-    popup.id = `popup-${targetId}`;
+    const popup = document.createElement("div");
+    popup.className = "chat-popup";
+    popup.id        = `popup-${targetId}`;
     popup.innerHTML = `
         <div class="popup-header" title="${targetName}">
             <span class="chat-title">${targetName}</span>
@@ -309,12 +343,12 @@ function abrirPopup(targetId, targetName) {
                 autocomplete="off">
         </div>`;
 
-    popup.querySelector('.close-btn').onclick = (e) => { e.stopPropagation(); fecharPopup(targetId); };
-    popup.querySelector('.popup-header').onclick = () => {
-        popup.classList.toggle('minimized');
-        if (!popup.classList.contains('minimized')) {
+    popup.querySelector(".close-btn").onclick = (e) => { e.stopPropagation(); fecharPopup(targetId); };
+    popup.querySelector(".popup-header").onclick = () => {
+        popup.classList.toggle("minimized");
+        if (!popup.classList.contains("minimized")) {
             limparNotificacoes(targetId);
-            const input = popup.querySelector('input');
+            const input = popup.querySelector("input");
             if (input) input.focus();
         }
     };
@@ -331,7 +365,7 @@ function fecharPopup(targetId) {
 }
 
 function handleEnter(targetId, event) {
-    if (event.key !== 'Enter') return;
+    if (event.key !== "Enter") return;
     const input = event.target;
     const texto = input.value.trim();
     if (!texto) return;
@@ -351,18 +385,18 @@ function enviarConfirmacaoLeitura(targetId) {
 }
 
 function marcarMensagensComoLidas(leitorId) {
-    document.querySelectorAll(`#msgs-${leitorId} .msg-check`).forEach(c => c.classList.add('lido'));
+    document.querySelectorAll(`#msgs-${leitorId} .msg-check`).forEach(c => c.classList.add("lido"));
 }
 
 function receberMensagem(dados) {
-    const idConversa = (dados.remetente_id === "eu") ? dados.destinatario_id : dados.remetente_id;
-    const classeCss  = (dados.remetente_id === "eu") ? "enviada" : "recebida";
-    const nomeExibir = (classeCss === "recebida") ? dados.remetente_nome : "Eu";
+    const idConversa = dados.remetente_id === "eu" ? dados.destinatario_id : dados.remetente_id;
+    const classeCss  = dados.remetente_id === "eu" ? "enviada" : "recebida";
+    const nomeExibir = classeCss === "recebida" ? dados.remetente_nome : "Eu";
 
     salvarMensagemLocal(idConversa, {
         texto: dados.texto, classe: classeCss,
-        hora: dados.hora, nome: nomeExibir,
-        timestamp: new Date().getTime()
+        hora:  dados.hora,  nome:   nomeExibir,
+        timestamp: new Date().getTime(),
     });
 
     let jaRenderizou = false;
@@ -378,14 +412,14 @@ function receberMensagem(dados) {
 
         const popup = chatsAbertos[idConversa];
         if (popup) {
-            const input = popup.querySelector('input');
-            const isFocado    = (document.activeElement === input && document.hasFocus());
-            const isMinimizado = popup.classList.contains('minimized');
+            const input       = popup.querySelector("input");
+            const isFocado    = document.activeElement === input && document.hasFocus();
+            const isMinimizado = popup.classList.contains("minimized");
 
             if (isMinimizado || !isFocado) {
-                const cardBadge = document.getElementById(`notif-${idConversa}`);
-                atualizarNotificacaoCard(idConversa, (cardBadge ? parseInt(cardBadge.innerText) || 0 : 0) + 1);
+                const cardBadge  = document.getElementById(`notif-${idConversa}`);
                 const popupBadge = document.getElementById(`popup-notif-${idConversa}`);
+                atualizarNotificacaoCard(idConversa,  (cardBadge  ? parseInt(cardBadge.innerText)  || 0 : 0) + 1);
                 atualizarNotificacaoPopup(idConversa, (popupBadge ? parseInt(popupBadge.innerText) || 0 : 0) + 1);
             } else {
                 setTimeout(() => enviarConfirmacaoLeitura(idConversa), 500);
@@ -399,7 +433,7 @@ function receberMensagem(dados) {
 function renderizarMensagem(idConversa, texto, classe, hora) {
     const bodyChat = document.getElementById(`msgs-${idConversa}`);
     if (!bodyChat) return;
-    const balao = document.createElement('div');
+    const balao = document.createElement("div");
     balao.className = `msg ${classe}`;
     balao.innerHTML = `
         <span>${texto}</span>
@@ -441,11 +475,11 @@ function gerarUUID() {
 // ── BROADCAST ─────────────────────────────────────────────────────────────
 
 function abrirModalBroadcast() {
-    const listaDiv = document.getElementById('lista-destinatarios');
+    const listaDiv = document.getElementById("lista-destinatarios");
     listaDiv.innerHTML = "";
-    document.getElementById('check-todos').checked = false;
-    document.getElementById('texto-broadcast').value = "";
-    const ip = document.getElementById('pesquisa-broadcast');
+    document.getElementById("check-todos").checked    = false;
+    document.getElementById("texto-broadcast").value  = "";
+    const ip = document.getElementById("pesquisa-broadcast");
     if (ip) ip.value = "";
 
     const alvos = listaUsuariosOnlineCache.filter(u => u.id !== meuId);
@@ -453,7 +487,7 @@ function abrirModalBroadcast() {
         listaDiv.innerHTML = "<p style='color:var(--text-muted);'>Nenhum usuário online disponível.</p>";
     } else {
         alvos.forEach(user => {
-            let cargo = user.cargo_exibicao || "Operador";
+            const cargo = user.cargo_exibicao || "Operador";
             listaDiv.innerHTML += `
                 <label class="item-destinatario">
                     <input type="checkbox" class="check-destinatario" value="${user.id}">
@@ -461,47 +495,47 @@ function abrirModalBroadcast() {
                 </label>`;
         });
     }
-    document.getElementById('modal-broadcast').style.display = 'flex';
+    document.getElementById("modal-broadcast").style.display = "flex";
 }
 
 function fecharModalBroadcast() {
-    document.getElementById('modal-broadcast').style.display = 'none';
+    document.getElementById("modal-broadcast").style.display = "none";
 }
 
 function filtrarBroadcast() {
-    const termo = document.getElementById('pesquisa-broadcast').value.toLowerCase();
-    document.querySelectorAll('.item-destinatario').forEach(item => {
-        const nome = item.querySelector('.nome-alvo').innerText.toLowerCase();
-        item.style.setProperty('display', nome.includes(termo) ? 'flex' : 'none', 'important');
+    const termo = document.getElementById("pesquisa-broadcast").value.toLowerCase();
+    document.querySelectorAll(".item-destinatario").forEach(item => {
+        const nome = item.querySelector(".nome-alvo").innerText.toLowerCase();
+        item.style.setProperty("display", nome.includes(termo) ? "flex" : "none", "important");
     });
 }
 
 function toggleTodosBroadcast() {
-    const marcar = document.getElementById('check-todos').checked;
-    document.querySelectorAll('.item-destinatario').forEach(item => {
-        if (item.style.display !== 'none') {
-            const cb = item.querySelector('.check-destinatario');
+    const marcar = document.getElementById("check-todos").checked;
+    document.querySelectorAll(".item-destinatario").forEach(item => {
+        if (item.style.display !== "none") {
+            const cb = item.querySelector(".check-destinatario");
             if (cb) cb.checked = marcar;
         }
     });
 }
 
 function enviarBroadcast() {
-    const checkboxes = document.querySelectorAll('.check-destinatario:checked');
-    const texto = document.getElementById('texto-broadcast').value.trim();
+    const checkboxes = document.querySelectorAll(".check-destinatario:checked");
+    const texto      = document.getElementById("texto-broadcast").value.trim();
     if (!checkboxes.length) { alert("Selecione pelo menos um destinatário."); return; }
-    if (!texto) { alert("Digite uma mensagem para enviar."); return; }
+    if (!texto)              { alert("Digite uma mensagem para enviar."); return; }
 
-    const alvosIds = Array.from(checkboxes).map(cb => cb.value);
+    const alvosIds   = Array.from(checkboxes).map(cb => cb.value);
     const textoFinal = `📢 [AVISO]: ${texto}`;
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ broadcast_targets: alvosIds, message: textoFinal, msg_id: gerarUUID() }));
-        const agora = new Date();
-        const horaStr = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const agora   = new Date();
+        const horaStr = agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
         alvosIds.forEach(id => {
-            salvarMensagemLocal(id, { texto: textoFinal, classe: 'enviada', hora: horaStr, nome: "Eu", timestamp: agora.getTime() });
-            if (chatsAbertos[id]) renderizarMensagem(id, textoFinal, 'enviada', horaStr);
+            salvarMensagemLocal(id, { texto: textoFinal, classe: "enviada", hora: horaStr, nome: "Eu", timestamp: agora.getTime() });
+            if (chatsAbertos[id]) renderizarMensagem(id, textoFinal, "enviada", horaStr);
         });
         alert(`Aviso enviado com sucesso para ${alvosIds.length} operador(es)!`);
         fecharModalBroadcast();
@@ -513,20 +547,20 @@ function enviarBroadcast() {
 // ── FILTRO DE CARTEIRAS ───────────────────────────────────────────────────
 
 function toggleMenuFiltro() {
-    document.getElementById('menu-filtro-equipes').classList.toggle('show');
+    document.getElementById("menu-filtro-equipes").classList.toggle("show");
 }
 
 function aplicarFiltroEquipes() {
     equipesSelecionadas = Array.from(
-        document.querySelectorAll('#menu-filtro-equipes input[type="checkbox"]:checked')
+        document.querySelectorAll("#menu-filtro-equipes input[type='checkbox']:checked")
     ).map(cb => cb.value);
     atualizarListaUsuarios(listaUsuariosOnlineCache);
 }
 
-document.addEventListener('click', function(event) {
-    const container = document.getElementById('multi-select-container');
-    const menu = document.getElementById('menu-filtro-equipes');
+document.addEventListener("click", function(event) {
+    const container = document.getElementById("multi-select-container");
+    const menu      = document.getElementById("menu-filtro-equipes");
     if (container && !container.contains(event.target) && menu) {
-        menu.classList.remove('show');
+        menu.classList.remove("show");
     }
 });
