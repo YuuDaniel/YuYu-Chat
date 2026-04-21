@@ -68,29 +68,9 @@
 
     <div id="popups-container"></div>
 
-    <script src="/static/script.js?v=2.2"></script>
+    <script src="/static/script.js?v=2.4"></script>
 
-    <!-- Avatar: polling seguro, sem MutationObserver -->
-    <script>
-        (function() {
-            var _avatarSet = false;
-            var _avatarTimer = setInterval(function() {
-                if (_avatarSet) { clearInterval(_avatarTimer); return; }
-                var msg    = document.getElementById('welcome-msg');
-                var avatar = document.getElementById('header-avatar');
-                if (!msg || !avatar) return;
-                var nome = msg.innerText.replace('Olá, ', '').trim();
-                if (!nome || nome === 'Bem-vindo') return;
-                var partes  = nome.split(' ').filter(Boolean);
-                var iniciais = partes.length >= 2
-                    ? (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
-                    : nome.substring(0, 2).toUpperCase();
-                avatar.textContent = iniciais;
-                _avatarSet = true;
-                clearInterval(_avatarTimer);
-            }, 250);
-        })();
-    </script>
+    <!-- Avatar gerado diretamente no ws.onopen dentro do script.js -->
 
     <div id="modal-broadcast" class="modal-overlay" style="display: none;">
         <div class="modal-content">
